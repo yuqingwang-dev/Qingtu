@@ -1,11 +1,11 @@
-version: '3.8'
+name: qingtu
 
 services:
   postgres:
-    image: postgres:15-alpine
-    container_name: routemind-postgres
+    image: pgvector/pgvector:pg15
+    container_name: qingtu-postgres
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-routemind}
+      POSTGRES_DB: ${POSTGRES_DB:-qingtu}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
@@ -18,11 +18,11 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - routemind-network
+      - qingtu-network
 
   redis:
     image: redis:7-alpine
-    container_name: routemind-redis
+    container_name: qingtu-redis
     ports:
       - "6379:6379"
     volumes:
@@ -33,18 +33,43 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - routemind-network
+      - qingtu-network
     command: redis-server --appendonly yes
 
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: routemind-backend
+    container_name: qingtu-backend
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-routemind}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-qingtu}
       REDIS_URL: redis://redis:6379/0
+      GENERATION_LIMIT_ENABLED: ${GENERATION_LIMIT_ENABLED:-True}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      LLM_PROVIDER: ${LLM_PROVIDER:-auto}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-flash}
+      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-30}
+      AGENT_MAX_TURNS: ${AGENT_MAX_TURNS:-8}
+      AGENT_MAX_TOOL_CALLS: ${AGENT_MAX_TOOL_CALLS:-24}
+      AGENT_MAX_TOKENS: ${AGENT_MAX_TOKENS:-12000}
+      AGENT_TIMEOUT_SECONDS: ${AGENT_TIMEOUT_SECONDS:-90}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
+      EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-https://api.openai.com/v1}
+      RAG_ENABLED: ${RAG_ENABLED:-False}
+      RAG_TOP_K: ${RAG_TOP_K:-50}
+      GOOGLE_PLACES_API_KEY: ${GOOGLE_PLACES_API_KEY}
+      AMAP_WEB_SERVICE_KEY: ${AMAP_WEB_SERVICE_KEY:-}
+      LIVE_POI_ENABLED: ${LIVE_POI_ENABLED:-True}
+      POI_CACHE_TTL_SECONDS: ${POI_CACHE_TTL_SECONDS:-3600}
+      POI_MAX_RESULTS: ${POI_MAX_RESULTS:-36}
+      POI_TIMEOUT_SECONDS: ${POI_TIMEOUT_SECONDS:-8}
+      ROUTE_MAX_REQUESTS: ${ROUTE_MAX_REQUESTS:-100}
+      ROUTE_CACHE_TTL_SECONDS: ${ROUTE_CACHE_TTL_SECONDS:-900}
+      ROUTE_TIMEOUT_SECONDS: ${ROUTE_TIMEOUT_SECONDS:-90}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-jwt-secret-change-in-production}
       DEBUG: ${DEBUG:-True}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:3001}
       SESSION_SECRET_KEY: ${SESSION_SECRET_KEY:-dev-secret-key-change-in-production}
@@ -59,7 +84,7 @@ services:
       redis:
         condition: service_healthy
     networks:
-      - routemind-network
+      - qingtu-network
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   frontend:
@@ -67,7 +92,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       target: development
-    container_name: routemind-frontend
+    container_name: qingtu-frontend
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
       NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-ws://localhost:8000}
@@ -80,15 +105,17 @@ services:
     depends_on:
       - backend
     networks:
-      - routemind-network
+      - qingtu-network
     command: npm run dev
 
 volumes:
   postgres_data:
+    name: ${POSTGRES_VOLUME_NAME:-qingtu_postgres_data}
     driver: local
   redis_data:
+    name: ${REDIS_VOLUME_NAME:-qingtu_redis_data}
     driver: local
 
 networks:
-  routemind-network:
+  qingtu-network:
     driver: bridge

@@ -1,7 +1,7 @@
 .PHONY: help install-backend install-frontend init-db run-backend run-frontend test clean
 
 help:
-	@echo "RouteMind - AI Travel Itinerary Planner"
+	@echo "Qingtu - AI Travel Itinerary Planner"
 	@echo ""
 	@echo "Available commands:"
 	@echo "  make install-backend    - Install backend Python dependencies"

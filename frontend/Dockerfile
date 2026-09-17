@@ -1,11 +1,11 @@
 # Multi-stage build for Next.js application
-FROM node:18-alpine as base
+FROM node:22-alpine AS base
 
 # Set working directory
 WORKDIR /app
 
 # Install dependencies only when needed
-FROM base as deps
+FROM base AS deps
 # Check https://github.com/nodejs/docker-node/tree/b4117f9333da4138b03a546ec926ef50a31506c3#nodealpine to understand why libc6-compat might be needed.
 RUN apk add --no-cache libc6-compat
 
@@ -16,7 +16,7 @@ COPY package.json package-lock.json* ./
 RUN npm ci
 
 # Development stage
-FROM base as development
+FROM base AS development
 
 # Copy node_modules from deps
 COPY --from=deps /app/node_modules ./node_modules
@@ -35,7 +35,7 @@ ENV HOSTNAME "0.0.0.0"
 CMD ["npm", "run", "dev"]
 
 # Build stage
-FROM base as builder
+FROM base AS builder
 
 # Copy node_modules from deps
 COPY --from=deps /app/node_modules ./node_modules
@@ -50,7 +50,7 @@ ENV NEXT_TELEMETRY_DISABLED 1
 RUN npm run build
 
 # Production stage
-FROM base as production
+FROM base AS production
 
 ENV NODE_ENV production
 ENV NEXT_TELEMETRY_DISABLED 1

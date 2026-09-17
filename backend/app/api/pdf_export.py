@@ -37,7 +37,7 @@ def generate_pdf(itinerary: ItineraryResponse) -> BytesIO:
     )
     
     # Title
-    story.append(Paragraph("RouteMind Travel Itinerary", title_style))
+    story.append(Paragraph("Qingtu Travel Itinerary", title_style))
     story.append(Spacer(1, 0.2 * inch))
     
     # Summary

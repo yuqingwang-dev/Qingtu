@@ -1,5 +1,5 @@
 """SQLAlchemy database models."""
-from sqlalchemy import Column, Integer, String, Float, Time, ForeignKey, Text, JSON, Boolean, DateTime
+from sqlalchemy import Column, Integer, String, Float, Time, ForeignKey, Text, JSON, Boolean, DateTime, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.session import Base
@@ -11,6 +11,34 @@ try:
 except ImportError:
     Vector = None
     PGVECTOR_AVAILABLE = False
+
+
+class KnowledgeDocument(Base):
+    """Reviewed source summaries, not unverified scraped pages."""
+    __tablename__ = "knowledge_documents"
+    id = Column(Integer, primary_key=True)
+    source_key = Column(String(100), unique=True, nullable=False)
+    title = Column(String(200), nullable=False)
+    url = Column(String(500), nullable=False)
+    city = Column(String(100), nullable=False, index=True)
+    poi_name = Column(String(100), nullable=False)
+    aliases = Column(JSON, nullable=False)
+    reviewed_on = Column(String(10), nullable=False)
+    expires_on = Column(String(10), nullable=False)
+    content_hash = Column(String(64), nullable=False)
+    version = Column(Integer, nullable=False, default=1)
+    chunks = relationship("KnowledgeChunk", cascade="all, delete-orphan", back_populates="document")
+
+
+class KnowledgeChunk(Base):
+    __tablename__ = "knowledge_chunks"
+    id = Column(String(140), primary_key=True)
+    document_id = Column(Integer, ForeignKey("knowledge_documents.id"), nullable=False, index=True)
+    topic = Column(String(40), nullable=False)
+    content = Column(Text, nullable=False)
+    embedding_model = Column(String(100), nullable=False)
+    embedding_vec = Column(Vector(512) if PGVECTOR_AVAILABLE else JSON, nullable=False)
+    document = relationship("KnowledgeDocument", back_populates="chunks")
 
 
 class User(Base):
@@ -36,9 +64,14 @@ class City(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), nullable=False, unique=True, index=True)
+    name_zh = Column(String(100), nullable=True)
     country = Column(String(100), nullable=False)
+    country_zh = Column(String(100), nullable=True)
     time_zone = Column(String(50), default="UTC")
     default_currency = Column(String(10), default="USD")
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    is_domestic = Column(Boolean, default=False, nullable=False, index=True)
     
     activities = relationship("Activity", back_populates="city", cascade="all, delete-orphan")
 
@@ -46,10 +79,12 @@ class City(Base):
 class Activity(Base):
     """Activity model."""
     __tablename__ = "activities"
+    __table_args__ = (UniqueConstraint("city_id", "provider_name", "provider_poi_id", name="uq_activity_provider_poi"),)
     
     id = Column(Integer, primary_key=True, index=True)
     city_id = Column(Integer, ForeignKey("cities.id"), nullable=False, index=True)
     name = Column(String(200), nullable=False)
+    name_zh = Column(String(200), nullable=True)
     category = Column(String(50), nullable=False, index=True)
     base_cost = Column(Float, default=0.0)
     avg_duration_minutes = Column(Integer, nullable=False)
@@ -59,7 +94,11 @@ class Activity(Base):
     open_time = Column(Time, nullable=True)  # None means always open
     close_time = Column(Time, nullable=True)
     description = Column(Text, nullable=True)
+    description_zh = Column(Text, nullable=True)
     tags = Column(JSON, nullable=True)  # List of tags like ["family_friendly", "wheelchair_accessible"]
+    provider_name = Column(String(30), nullable=True)
+    provider_poi_id = Column(String(100), nullable=True)
+    provider_metadata = Column(JSON, nullable=True)
     
     city = relationship("City", back_populates="activities")
     reviews = relationship("Review", back_populates="activity", cascade="all, delete-orphan")

@@ -1,5 +1,7 @@
 """FastAPI application entry point."""
 import logging
+# Provider settings are lightweight; the SDK loads only when a model is used.
+from app.llm.provider import get_chat_provider
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -11,6 +13,9 @@ from app.api.auth import router as auth_router
 from app.websocket.routes import router as websocket_router
 from app.api.refinement import router as refinement_router
 from app.api.agent import router as agent_router
+from app.api.domestic import router as domestic_router
+from app.api.pois import router as pois_router
+from app.api.knowledge import router as knowledge_router
 from app.middleware.rate_limit import RateLimitMiddleware
 from app.core.cache import cache
 from app.core.logging_config import setup_logging
@@ -23,21 +28,23 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
     setup_logging()
-    logger.info("Starting RouteMind API...")
+    logger.info("Starting Qingtu API...")
+    provider = get_chat_provider()
+    logger.info("Chat provider: %s; model: %s; configured: %s", provider.name, provider.model, bool(provider.api_key))
 
     await cache.connect()
-    logger.info("RouteMind API started successfully")
+    logger.info("Qingtu API started successfully")
 
     yield
 
-    logger.info("Shutting down RouteMind API...")
+    logger.info("Shutting down Qingtu API...")
     await cache.close()
-    logger.info("RouteMind API shut down")
+    logger.info("Qingtu API shut down")
 
 
 app = FastAPI(
-    title="RouteMind API",
-    description="AI-powered travel itinerary planner - Portfolio Edition",
+    title="晴途 Qingtu API",
+    description="Qingtu 晴途 · 智能旅行规划助手",
     version="2.0.0",
     lifespan=lifespan,
 )
@@ -60,6 +67,9 @@ app.add_middleware(RateLimitMiddleware, requests_per_minute=10)
 # Include API routes
 app.include_router(auth_router, prefix=f"{settings.API_V1_PREFIX}/auth", tags=["auth"])
 app.include_router(router, prefix=settings.API_V1_PREFIX)
+app.include_router(knowledge_router, prefix=settings.API_V1_PREFIX)
+app.include_router(domestic_router, prefix=settings.API_V1_PREFIX, tags=["domestic"])
+app.include_router(pois_router, prefix=settings.API_V1_PREFIX, tags=["POI搜索"])
 app.include_router(streaming_router, prefix=settings.API_V1_PREFIX, tags=["streaming"])
 app.include_router(multi_city_router, prefix=settings.API_V1_PREFIX, tags=["multi-city"])
 app.include_router(websocket_router, tags=["websocket"])
@@ -71,7 +81,7 @@ app.include_router(agent_router, prefix=settings.API_V1_PREFIX, tags=["agent"])
 async def root():
     """Root endpoint."""
     return {
-        "message": "RouteMind API - Portfolio Edition",
+        "message": "晴途 Qingtu - Travel Planning Assistant",
         "version": "2.0.0",
         "features": [
             "AI-powered itinerary planning",

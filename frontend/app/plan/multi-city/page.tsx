@@ -13,7 +13,7 @@ const WorldMapSelector = dynamic(() => import("@/components/WorldMapSelector"), 
   ssr: false,
   loading: () => (
     <div className="w-full h-96 glass-card rounded-lg flex items-center justify-center">
-      <p className="text-gray-300">Loading world map...</p>
+      <p className="text-gray-300">世界地图加载中...</p>
     </div>
   ),
 });
@@ -44,11 +44,21 @@ const CATEGORIES = [
 ] as const;
 
 const LOADING_STEPS = [
-  { label: "Planning your route", icon: "🗺️" },
-  { label: "Optimizing city order", icon: "⚡" },
-  { label: "Scheduling activities", icon: "📅" },
-  { label: "Almost ready...", icon: "🎉" },
+  { label: "正在规划路线", icon: "🗺️" },
+  { label: "正在优化城市顺序", icon: "⚡" },
+  { label: "正在安排活动", icon: "📅" },
+  { label: "马上就好...", icon: "🎉" },
 ];
+
+const CATEGORY_LABELS: Record<string, string> = {
+  food: "美食 Food",
+  culture: "文化 Culture",
+  nightlife: "夜生活 Nightlife",
+  nature: "自然 Nature",
+  shopping: "购物 Shopping",
+  adventure: "冒险 Adventure",
+  beaches: "海滩 Beaches",
+};
 
 function LoadingProgress({ cityNames }: { cityNames?: string[] }) {
   const [activeStep, setActiveStep] = useState(0);
@@ -65,12 +75,12 @@ function LoadingProgress({ cityNames }: { cityNames?: string[] }) {
   return (
     <div className="glass-card rounded-2xl p-10 flex flex-col items-center justify-center min-h-[340px]">
       <h2 className="text-2xl font-bold gradient-text mb-2">
-        Planning your multi-city journey...
+        正在规划你的多城市旅程...
       </h2>
       {cityNames && cityNames.length > 0 && (
         <p className="text-purple-300 text-sm mb-1">{cityNames.join(" → ")}</p>
       )}
-      <p className="text-gray-400 text-sm mb-8">This usually takes 10–20 seconds</p>
+      <p className="text-gray-400 text-sm mb-8">通常需要 10 到 20 秒</p>
 
       {/* Progress bar */}
       <div className="w-full max-w-sm bg-gray-700 rounded-full h-2 mb-8 overflow-hidden">
@@ -192,7 +202,7 @@ export default function MultiCityPage() {
 
     if (selectedCities.length < 2) {
       setToast({
-        message: "Please select at least 2 cities",
+        message: "请至少选择 2 座城市",
         type: "error",
       });
       return;
@@ -227,7 +237,7 @@ export default function MultiCityPage() {
       if (data.success && data.trip_plan) {
         setTripPlan(data.trip_plan);
         setToast({
-          message: `Successfully planned your ${data.trip_plan.total_cities}-city trip!`,
+          message: `已成功生成 ${data.trip_plan.total_cities} 城市行程！`,
           type: "success",
         });
         setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 100);
@@ -237,7 +247,7 @@ export default function MultiCityPage() {
     } catch (error) {
       console.error("Error planning trip:", error);
       setToast({
-        message: error instanceof Error ? error.message : "Failed to plan trip. Please try again.",
+        message: error instanceof Error ? error.message : "生成行程失败，请稍后重试。",
         type: "error",
       });
     } finally {
@@ -275,15 +285,15 @@ export default function MultiCityPage() {
             <div className="flex items-center gap-3">
               <span className="text-2xl">💡</span>
               <div>
-                <p className="text-white font-medium">Sign in to save and share your itinerary</p>
-                <p className="text-gray-400 text-sm">Create an account to access your trips from anywhere</p>
+                <p className="text-white font-medium">登录后可保存并分享你的行程</p>
+                <p className="text-gray-400 text-sm">创建账号后，可以在任何设备查看你的旅行计划</p>
               </div>
             </div>
             <button
               onClick={() => signIn("google")}
               className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:opacity-90 transition-opacity whitespace-nowrap"
             >
-              Sign In
+              立即登录
             </button>
           </div>
         )}
@@ -294,10 +304,10 @@ export default function MultiCityPage() {
             onClick={() => router.push("/")}
             className="px-4 py-2 glass-card rounded-lg hover:bg-purple-500/20 transition-colors text-white"
           >
-            ← Back to Home
+            ← 返回首页
           </button>
           <h1 className="text-3xl md:text-4xl font-bold gradient-text">
-            🗺️ Multi-City Planner
+            🗺️ 多城市规划
           </h1>
           <div className="w-24"></div> {/* Spacer for centering */}
         </div>
@@ -310,7 +320,7 @@ export default function MultiCityPage() {
             }`}>
               1
             </div>
-            <span className="hidden md:inline text-white">Select Cities</span>
+            <span className="hidden md:inline text-white">选择城市</span>
           </div>
           <div className="w-12 h-0.5 bg-gray-600"></div>
           <div className={`flex items-center gap-2 ${step === "plan" ? "opacity-100" : "opacity-50"}`}>
@@ -319,7 +329,7 @@ export default function MultiCityPage() {
             }`}>
               2
             </div>
-            <span className="hidden md:inline text-white">Plan Trip</span>
+            <span className="hidden md:inline text-white">规划行程</span>
           </div>
         </div>
 
@@ -332,7 +342,7 @@ export default function MultiCityPage() {
                 selectedCities={selectedCities}
                 onCitySelect={toggleCity}
                 multiSelect={true}
-                title={`Select Your Destinations (${selectedCities.length}/5)`}
+                title={`选择你的目的地 (${selectedCities.length}/5)`}
               />
             </div>
 
@@ -340,7 +350,7 @@ export default function MultiCityPage() {
             {selectedCities.length > 0 && (
               <div className="glass-card rounded-2xl p-6">
                 <h3 className="text-xl font-bold text-white mb-4">
-                  Selected Cities ({selectedCities.length})
+                  已选城市 ({selectedCities.length})
                 </h3>
                 <div className="flex flex-wrap gap-2 mb-4">
                   {selectedCityObjects.map((city) => (
@@ -364,8 +374,8 @@ export default function MultiCityPage() {
                   className="w-full py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {selectedCities.length < 2
-                    ? "Select at least 2 cities to continue"
-                    : `Continue with ${selectedCities.length} cities`}
+                    ? "至少选择 2 座城市后继续"
+                    : `使用这 ${selectedCities.length} 座城市继续`}
                 </button>
               </div>
             )}
@@ -374,7 +384,7 @@ export default function MultiCityPage() {
             {popularRoutes.length > 0 && selectedCities.length === 0 && (
               <div className="glass-card rounded-2xl p-6">
                 <h3 className="text-xl font-bold text-white mb-4">
-                  ✨ Popular Routes
+                  ✨ 热门路线
                 </h3>
                 <div className="grid md:grid-cols-2 gap-4">
                   {popularRoutes.map((route, index) => (
@@ -390,7 +400,7 @@ export default function MultiCityPage() {
                         {route.cities.join(" → ")}
                       </div>
                       <div className="text-xs text-purple-300 mt-2">
-                        {route.suggested_days} days suggested
+                        建议 {route.suggested_days} 天
                       </div>
                     </button>
                   ))}
@@ -413,10 +423,10 @@ export default function MultiCityPage() {
                 onClick={() => setStep("select")}
                 className="text-purple-400 hover:text-purple-300 text-sm mb-4"
               >
-                ← Change cities
+                ← 重新选择城市
               </button>
               <h2 className="text-2xl font-bold gradient-text mb-2">
-                Plan Your Multi-City Journey
+                规划你的多城市旅程
               </h2>
               <div className="flex flex-wrap gap-2">
                 {selectedCityObjects.map((city, index) => (
@@ -432,7 +442,7 @@ export default function MultiCityPage() {
               {/* Total Days */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Total Trip Duration (Days)
+                  总旅行天数
                 </label>
                 <input
                   type="number"
@@ -444,7 +454,7 @@ export default function MultiCityPage() {
                   required
                 />
                 <p className="text-sm text-gray-400 mt-1">
-                  Minimum: {selectedCities.length} days (1 per city)
+                  最少 {selectedCities.length} 天（每座城市至少 1 天）
                 </p>
               </div>
 
@@ -452,12 +462,12 @@ export default function MultiCityPage() {
               {daysAllocation.length > 0 && (
                 <div className="p-4 bg-gray-800/30 rounded-lg">
                   <h3 className="font-medium text-white mb-2">
-                    Suggested Days per City:
+                    建议停留天数：
                   </h3>
                   <div className="space-y-1">
                     {daysAllocation.map((allocation: any, index: number) => (
                       <div key={index} className="text-sm text-gray-300">
-                        {allocation.city_name}: {allocation.days} {allocation.days === 1 ? 'day' : 'days'}
+                        {allocation.city_name}：{allocation.days} {allocation.days === 1 ? '天' : '天'}
                       </div>
                     ))}
                   </div>
@@ -467,7 +477,7 @@ export default function MultiCityPage() {
               {/* Interests */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-3">
-                  Interests (Optional)
+                  兴趣偏好（可选）
                 </label>
                 <div className="flex flex-wrap gap-2">
                   {CATEGORIES.map((category) => (
@@ -481,7 +491,7 @@ export default function MultiCityPage() {
                           : "bg-gray-800/50 text-gray-300 hover:bg-gray-700/50"
                       }`}
                     >
-                      {category.charAt(0).toUpperCase() + category.slice(1)}
+                      {CATEGORY_LABELS[category] || category}
                     </button>
                   ))}
                 </div>
@@ -490,16 +500,16 @@ export default function MultiCityPage() {
               {/* Pace */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Travel Pace
+                  旅行节奏
                 </label>
                 <select
                   value={pace}
                   onChange={(e) => setPace(e.target.value as any)}
                   className="w-full px-4 py-2 bg-gray-800/50 border border-purple-500/30 rounded-lg text-white focus:outline-none focus:border-purple-500"
                 >
-                  <option value="relaxed">Relaxed - Take it easy</option>
-                  <option value="moderate">Moderate - Balanced pace</option>
-                  <option value="packed">Packed - See everything</option>
+                  <option value="relaxed">轻松 Relaxed - 慢一点更从容</option>
+                  <option value="moderate">均衡 Moderate - 节奏平衡</option>
+                  <option value="packed">紧凑 Packed - 尽量多玩</option>
                 </select>
               </div>
 
@@ -509,7 +519,7 @@ export default function MultiCityPage() {
                 disabled={loading}
                 className="w-full py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
               >
-                {loading ? "Planning Your Trip..." : "Generate Multi-City Itinerary"}
+                {loading ? "正在生成行程..." : "生成多城市行程"}
               </button>
             </form>
           </div>

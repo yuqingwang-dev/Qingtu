@@ -126,24 +126,62 @@ export const apiClient = new ApiClient();
 export interface City {
   id: number;
   name: string;
+  name_zh?: string | null;
   country: string;
-  latitude: number;
-  longitude: number;
+  country_zh?: string | null;
+  time_zone?: string;
+  default_currency?: string;
+  latitude?: number;
+  longitude?: number;
+  is_domestic?: boolean;
+  supports_real_routes?: boolean;
 }
 
 export interface Activity {
   id: number;
   name: string;
+  name_zh?: string | null;
   category: string;
-  base_cost: number;
-  avg_duration_minutes: number;
+  cost: number;
+  duration: number;
   rating: number;
-  latitude: number;
-  longitude: number;
+  coordinates: {
+    latitude: number;
+    longitude: number;
+  };
+  tags?: string[] | null;
+  description?: string | null;
+  description_zh?: string | null;
 }
 
-export interface DayActivity {
+export interface ItineraryBlock {
+  start_time: string;
+  end_time: string;
   activity: Activity;
+  travel_time_from_previous?: number;
+  notes?: string;
+}
+
+export interface ItineraryDay {
+  date: string;
+  city_id?: number;
+  city_name?: string;
+  total_cost: number;
+  total_duration_minutes: number;
+  blocks: ItineraryBlock[];
+}
+
+export interface LegacyDayActivity {
+  activity: {
+    id: number;
+    name: string;
+    category: string;
+    base_cost: number;
+    avg_duration_minutes: number;
+    rating: number;
+    latitude: number;
+    longitude: number;
+  };
   start_time: string;
   end_time: string;
   travel_time_minutes?: number;
@@ -152,25 +190,34 @@ export interface DayActivity {
 export interface DayPlan {
   day_number: number;
   date: string;
-  activities: DayActivity[];
+  activities: LegacyDayActivity[];
   total_cost: number;
   total_duration_minutes: number;
 }
 
 export interface ItinerarySummary {
   total_cost: number;
-  total_duration_minutes: number;
-  total_activities: number;
-  category_distribution: Record<string, number>;
-  average_rating: number;
+  avg_cost_per_day: number;
+  categories_covered: string[];
+  pace_label: string;
+  total_duration_minutes?: number;
+  total_activities?: number;
+  category_distribution?: Record<string, number>;
+  average_rating?: number;
+}
+
+export interface NarrativeResult {
+  narrative_text: string;
+  explanations?: string;
+  tips?: string;
 }
 
 export interface Itinerary {
-  days: DayPlan[];
+  days: ItineraryDay[];
   summary: ItinerarySummary;
   optimization_score?: number;
   confidence_score?: number;
-  narrative?: string;
+  narrative?: NarrativeResult;
 }
 
 export interface TripPreferences {
@@ -192,8 +239,8 @@ export interface SavedItinerary {
   created_at: string;
   updated_at: string;
   is_public: boolean;
-  share_token?: string;
-  share_url?: string;
+  share_token: string | null;
+  share_url: string | null;
   view_count: number;
   trip_preferences: TripPreferences;
   itinerary: Itinerary;

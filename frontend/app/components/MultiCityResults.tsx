@@ -7,13 +7,21 @@ import dynamic from "next/dynamic";
 import Toast from "./Toast";
 import ActivityModal from "./ActivityModal";
 import { api } from "../lib/api";
+import {
+  formatChineseDate,
+  formatChineseShortDate,
+  formatChineseTime,
+  formatChineseWeekday,
+  formatPriceWithRmb,
+  getCategoryLabel,
+} from "../lib/locale";
 
 // Dynamic import for Google Maps to avoid SSR issues
 const GoogleItineraryMap = dynamic(() => import("./GoogleItineraryMap"), {
   ssr: false,
   loading: () => (
     <div className="w-full h-96 bg-gray-100 rounded-lg flex items-center justify-center">
-      <p className="text-gray-500">Loading map...</p>
+      <p className="text-gray-500">地图加载中...</p>
     </div>
   ),
 });
@@ -188,10 +196,10 @@ export default function MultiCityResults({
       } else {
         const err = await response.json();
         const detail = typeof err.detail === "string" ? err.detail : JSON.stringify(err.detail);
-        setRefineResult(prev => ({ ...prev, [cityId]: `Could not apply: ${detail || "Unknown error"}` }));
+        setRefineResult(prev => ({ ...prev, [cityId]: `暂时无法应用修改：${detail || "未知错误"}` }));
       }
     } catch {
-      setRefineResult(prev => ({ ...prev, [cityId]: "Request failed. Is the backend running?" }));
+      setRefineResult(prev => ({ ...prev, [cityId]: "请求失败，请确认后端是否已启动。" }));
     } finally {
       setIsRefining(prev => ({ ...prev, [cityId]: false }));
     }
@@ -201,25 +209,15 @@ export default function MultiCityResults({
     setExpandedCity(expandedCity === cityId ? null : cityId);
   };
 
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  };
-
-  const formatTime = (timeStr: string) => {
-    return new Date(timeStr).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
-  };
+  const formatDate = (dateStr: string) => formatChineseDate(dateStr, true);
+  const formatTime = (timeStr: string) => formatChineseTime(timeStr);
 
 
   const handleShareItinerary = async () => {
     // Must be signed in to share
     if (!session) {
       setToast({
-        message: "Sign in to save and share your itinerary!",
+        message: "请先登录，再保存或分享你的行程。",
         type: "info"
       });
       setTimeout(() => signIn("google"), 1500);
@@ -265,9 +263,9 @@ export default function MultiCityResults({
         optimization_score: 0.85,
         confidence_score: 0.90,
         narrative: {
-          narrative_text: `Explore ${tripPlan.total_cities} amazing cities over ${tripPlan.total_days} days!`,
-          explanations: `This ${tripPlan.pace}-paced journey takes you through ${tripPlan.cities.map(c => c.city_name).join(", ")}.`,
-          tips: "Book accommodations in advance and check visa requirements for each country."
+          narrative_text: `这是一趟覆盖 ${tripPlan.total_cities} 座城市、共 ${tripPlan.total_days} 天的多城市旅行。你将依次前往 ${tripPlan.cities.map(c => c.city_name).join("、")}，整体节奏为 ${tripPlan.pace}。`,
+          explanations: `系统会按照城市顺序帮你安排每日活动，并尽量让路线更顺畅。`,
+          tips: "建议提前确认酒店、城市间交通和证件要求。"
         }
       };
 
@@ -280,11 +278,11 @@ export default function MultiCityResults({
       if (savedItinerary.share_url) {
         setShareUrl(savedItinerary.share_url);
         await navigator.clipboard.writeText(savedItinerary.share_url);
-        setToast({ message: "Share link copied to clipboard!", type: "success" });
+        setToast({ message: "分享链接已复制到剪贴板！", type: "success" });
       }
     } catch (error) {
       console.error("Share itinerary error:", error);
-      setToast({ message: "Failed to create share link", type: "error" });
+      setToast({ message: "创建分享链接失败", type: "error" });
     } finally {
       setIsSharing(false);
     }
@@ -294,7 +292,7 @@ export default function MultiCityResults({
     // If not signed in, show prompt to sign in
     if (!session) {
       setToast({
-        message: "Sign in to save your itinerary and access it from anywhere!",
+        message: "请先登录，保存后可在任何设备查看你的行程。",
         type: "info"
       });
       setTimeout(() => signIn("google"), 1500);
@@ -344,9 +342,9 @@ export default function MultiCityResults({
         optimization_score: 0.85, // Default score
         confidence_score: 0.90, // Default score
         narrative: {
-          narrative_text: `Explore ${tripPlan.total_cities} amazing cities over ${tripPlan.total_days} days!`,
-          explanations: `This ${tripPlan.pace}-paced journey takes you through ${cityNames}.`,
-          tips: "Book accommodations in advance and check visa requirements for each country."
+          narrative_text: `这是一趟覆盖 ${tripPlan.total_cities} 座城市、共 ${tripPlan.total_days} 天的多城市旅行。你将依次前往 ${cityNames}，整体节奏为 ${tripPlan.pace}。`,
+          explanations: "系统会按照城市顺序帮你安排每日活动，并尽量让路线更顺畅。",
+          tips: "建议提前确认酒店、城市间交通和证件要求。"
         }
       };
 
@@ -356,12 +354,12 @@ export default function MultiCityResults({
         is_public: false
       }, authToken);
 
-      setToast({ message: "Itinerary saved successfully!", type: "success" });
+      setToast({ message: "行程已成功保存！", type: "success" });
 
       // Redirect to My Itineraries after successful save
       setTimeout(() => router.push("/my-itineraries"), 1500);
     } catch (error) {
-      setToast({ message: "Failed to save itinerary", type: "error" });
+      setToast({ message: "保存行程失败", type: "error" });
     } finally {
       setIsSaving(false);
     }
@@ -383,7 +381,7 @@ export default function MultiCityResults({
         <div className="flex items-start justify-between mb-6 flex-wrap gap-4">
           <div>
             <h2 className="text-3xl font-bold gradient-text mb-1">
-              Your {tripPlan.total_cities}-City Adventure
+              {tripPlan.total_cities} 城市旅行方案
             </h2>
             <p className="text-gray-400">
               {formatDate(tripPlan.trip_start)} — {formatDate(tripPlan.trip_end)}
@@ -402,20 +400,20 @@ export default function MultiCityResults({
               disabled={isSharing}
               className="px-4 py-2 glass-card rounded-lg text-white font-semibold hover:bg-white/10 transition-colors disabled:opacity-50"
             >
-              {isSharing ? "Sharing..." : "🔗 Share"}
+              {isSharing ? "分享中..." : "🔗 分享"}
             </button>
             <button
               onClick={handleSaveItinerary}
               disabled={isSaving}
               className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
             >
-              {isSaving ? "Saving..." : "💾 Save"}
+              {isSaving ? "保存中..." : "💾 保存"}
             </button>
             <button
               onClick={onStartOver}
               className="px-4 py-2 glass-card rounded-lg text-white font-semibold hover:bg-white/10 transition-colors"
             >
-              ← New Trip
+              ← 新建行程
             </button>
           </div>
         </div>
@@ -423,19 +421,19 @@ export default function MultiCityResults({
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="glass-card rounded-xl p-4 text-center">
             <div className="text-2xl font-bold gradient-text">{tripPlan.total_days}</div>
-            <div className="text-xs text-gray-400 mt-1">Total Days</div>
+            <div className="text-xs text-gray-400 mt-1">总天数</div>
           </div>
           <div className="glass-card rounded-xl p-4 text-center">
             <div className="text-2xl font-bold gradient-text">{tripPlan.total_cities}</div>
-            <div className="text-xs text-gray-400 mt-1">Cities</div>
+            <div className="text-xs text-gray-400 mt-1">城市数</div>
           </div>
           <div className="glass-card rounded-xl p-4 text-center">
-            <div className="text-2xl font-bold gradient-text">${Math.round(tripPlan.total_estimated_cost)}</div>
-            <div className="text-xs text-gray-400 mt-1">Est. Cost</div>
+            <div className="text-2xl font-bold gradient-text">{formatPriceWithRmb(tripPlan.total_estimated_cost)}</div>
+            <div className="text-xs text-gray-400 mt-1">预计花费</div>
           </div>
           <div className="glass-card rounded-xl p-4 text-center">
             <div className="text-2xl font-bold gradient-text capitalize">{tripPlan.pace}</div>
-            <div className="text-xs text-gray-400 mt-1">Pace</div>
+            <div className="text-xs text-gray-400 mt-1">节奏</div>
           </div>
         </div>
       </div>
@@ -462,14 +460,14 @@ export default function MultiCityResults({
                   <div className="text-left">
                     <h3 className="text-2xl font-bold text-white">{cityPlan.city_name}</h3>
                     <p className="text-sm text-gray-400">
-                      {cityPlan.country} · {cityPlan.days_allocated} days · {formatDate(cityPlan.start_date)} — {formatDate(cityPlan.end_date)}
+                      {cityPlan.country} · {cityPlan.days_allocated} 天 · {formatDate(cityPlan.start_date)} — {formatDate(cityPlan.end_date)}
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="text-right">
-                    <div className="text-xs text-gray-500 mb-0.5">Est. Cost</div>
-                    <div className="text-lg font-bold text-purple-300">${Math.round(cityPlan.estimated_cost)}</div>
+                    <div className="text-xs text-gray-500 mb-0.5">预计花费</div>
+                    <div className="text-lg font-bold text-purple-300">{formatPriceWithRmb(cityPlan.estimated_cost)}</div>
                   </div>
                   <svg
                     className={`w-5 h-5 text-gray-400 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}
@@ -486,15 +484,14 @@ export default function MultiCityResults({
                   {/* Left Sidebar — Day List */}
                   <div className="w-52 shrink-0 border-r border-white/10 flex flex-col overflow-y-auto">
                     <div className="px-4 py-3 border-b border-white/10">
-                      <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">In {cityPlan.city_name}</p>
-                      <p className="text-sm font-bold text-white mt-0.5">{cityPlan.days_allocated} Days</p>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">在 {cityPlan.city_name}</p>
+                      <p className="text-sm font-bold text-white mt-0.5">共 {cityPlan.days_allocated} 天</p>
                     </div>
                     <div className="flex-1">
                       {cityPlan.itinerary.days.map((day, dayIndex) => {
-                        const date = new Date(day.date);
                         const isActive = activeDayIndex === dayIndex;
-                        const dayLabel = date.toLocaleDateString("en-US", { weekday: "short" });
-                        const dateLabel = date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+                        const dayLabel = formatChineseWeekday(day.date);
+                        const dateLabel = formatChineseShortDate(day.date);
                         const topCategories = [...new Set(day.blocks.map(b => b.activity.category))].slice(0, 3);
                         return (
                           <button
@@ -509,18 +506,18 @@ export default function MultiCityResults({
                             )}
                             <div className="flex items-center justify-between mb-1">
                               <span className={`text-xs font-bold uppercase tracking-wider ${isActive ? "text-purple-400" : "text-gray-600"}`}>
-                                Day {dayIndex + 1}
+                                第 {dayIndex + 1} 天
                               </span>
                               <span className={`text-xs ${isActive ? "text-purple-300" : "text-gray-600"}`}>
-                                ${day.total_cost.toFixed(0)}
+                                {formatPriceWithRmb(day.total_cost)}
                               </span>
                             </div>
-                            <div className="text-sm font-semibold mb-1">{dayLabel}, {dateLabel}</div>
+                            <div className="text-sm font-semibold mb-1">{dayLabel}，{dateLabel}</div>
                             <div className="flex gap-0.5 text-sm">
                               {topCategories.map(cat => (
                                 <span key={cat} title={cat}>{categoryIcons[cat] ?? "📍"}</span>
                               ))}
-                              <span className="text-xs text-gray-600 ml-1 self-center">{day.blocks.length} stops</span>
+                              <span className="text-xs text-gray-600 ml-1 self-center">{day.blocks.length} 个地点</span>
                             </div>
                           </button>
                         );
@@ -535,14 +532,14 @@ export default function MultiCityResults({
                       <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between">
                         <div>
                           <h3 className="text-lg font-bold text-white">
-                            Day {activeDayIndex + 1} — {new Date(activeDay.date).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+                            第 {activeDayIndex + 1} 天 · {formatChineseDate(activeDay.date)}
                           </h3>
                           <p className="text-sm text-gray-400 mt-0.5">
-                            {activeDay.blocks.length} activities
+                            {activeDay.blocks.length} 个活动
                           </p>
                         </div>
                         <span className="text-purple-300 font-semibold text-sm">
-                          ${activeDay.total_cost.toFixed(0)}
+                          {formatPriceWithRmb(activeDay.total_cost)}
                         </span>
                       </div>
 
@@ -550,7 +547,7 @@ export default function MultiCityResults({
                         {/* AI Narrative — shown once per city (on first day view) */}
                         {activeDayIndex === 0 && cityPlan.narrative?.narrative_text && (
                           <div className="glass-card rounded-2xl p-5 mb-6 border border-purple-500/20">
-                            <h3 className="text-base font-bold text-white mb-2">✨ AI Travel Guide — {cityPlan.city_name}</h3>
+                            <h3 className="text-base font-bold text-white mb-2">✨ AI 行程解读 · {cityPlan.city_name}</h3>
                             <p className="text-gray-300 leading-relaxed whitespace-pre-line text-sm">
                               {cityPlan.narrative.narrative_text}
                             </p>
@@ -559,7 +556,10 @@ export default function MultiCityResults({
 
                         {/* Map */}
                         <div className="mb-6 rounded-xl overflow-hidden mx-auto" style={{ maxWidth: "75%" }}>
-                          <GoogleItineraryMap key={`${cityPlan.city_id}-${activeDayIndex}`} activities={activeDay.blocks.map(b => b.activity)} />
+                          <GoogleItineraryMap
+                            key={`${cityPlan.city_id}-${activeDayIndex}`}
+                            activities={activeDay.blocks.map(b => b.activity)}
+                          />
                         </div>
 
                         {/* Timeline */}
@@ -572,7 +572,7 @@ export default function MultiCityResults({
                                   <div className="flex items-center gap-3 pl-[52px] py-1">
                                     <div className="w-px h-5 bg-purple-500/30" />
                                     <span className="text-xs text-gray-500 flex items-center gap-1.5">
-                                      🗺️ {block.travel_time_from_previous} min travel
+                                      🗺️ {block.travel_time_from_previous} 分钟路程
                                     </span>
                                   </div>
                                 )}
@@ -590,14 +590,14 @@ export default function MultiCityResults({
                                     <div className="flex items-start justify-between gap-2">
                                       <h4 className="font-semibold text-white group-hover:text-purple-200 transition-colors">{block.activity.name}</h4>
                                       <span className="text-purple-300 font-medium text-sm shrink-0">
-                                        ${block.activity.cost.toFixed(0)}
+                                        {formatPriceWithRmb(block.activity.cost)}
                                       </span>
                                     </div>
                                     <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                                       <span className={`text-xs px-2 py-0.5 rounded-full text-white/90 ${dotColor}/30 border border-white/10`}>
-                                        {block.activity.category}
+                                        {getCategoryLabel(block.activity.category)}
                                       </span>
-                                      <span className="text-xs text-gray-500">⏱ {block.activity.duration} min</span>
+                                      <span className="text-xs text-gray-500">⏱ {block.activity.duration} 分钟</span>
                                       <span className="text-xs text-yellow-400">⭐ {block.activity.rating.toFixed(1)}</span>
                                     </div>
                                   </div>
@@ -609,15 +609,15 @@ export default function MultiCityResults({
 
                         {/* Refine with AI */}
                         <div className="mt-6 glass-card rounded-2xl p-5 border border-purple-500/20">
-                          <h3 className="text-base font-bold text-white mb-1">🔧 Refine with AI</h3>
-                          <p className="text-gray-400 text-xs mb-3">Tell the AI what to change for {cityPlan.city_name}.</p>
+                          <h3 className="text-base font-bold text-white mb-1">🔧 AI 微调行程</h3>
+                          <p className="text-gray-400 text-xs mb-3">告诉 AI 你希望如何调整 {cityPlan.city_name} 的安排。</p>
                           <div className="flex gap-2">
                             <input
                               type="text"
                               value={refineMessage[cityPlan.city_id] ?? ""}
                               onChange={(e) => setRefineMessage(prev => ({ ...prev, [cityPlan.city_id]: e.target.value }))}
                               onKeyDown={(e) => e.key === "Enter" && !isRefining[cityPlan.city_id] && handleRefineCity(cityPlan)}
-                              placeholder={`e.g. "Replace museum with nightlife" or "Add food on Day 1"`}
+                              placeholder={`例如："把博物馆换成夜生活" 或 "第 1 天加一顿美食"`}
                               className="flex-1 bg-gray-800/60 border border-gray-600 text-white rounded-lg px-3 py-2 text-sm placeholder-gray-500 focus:outline-none focus:border-purple-500"
                               disabled={!!isRefining[cityPlan.city_id]}
                             />
@@ -626,16 +626,16 @@ export default function MultiCityResults({
                               disabled={!!isRefining[cityPlan.city_id] || !refineMessage[cityPlan.city_id]?.trim()}
                               className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg font-medium hover:opacity-90 transition-opacity disabled:opacity-40 text-sm whitespace-nowrap"
                             >
-                              {isRefining[cityPlan.city_id] ? "Refining..." : "Apply"}
+                              {isRefining[cityPlan.city_id] ? "调整中..." : "应用修改"}
                             </button>
                           </div>
                           {refineResult[cityPlan.city_id] && (
-                            <div className={`mt-3 text-sm px-4 py-3 rounded-lg ${refineResult[cityPlan.city_id]?.startsWith("Could not") || refineResult[cityPlan.city_id]?.startsWith("Request failed") ? "bg-red-900/30 text-red-300" : "bg-purple-900/30 text-purple-200"}`}>
+                            <div className={`mt-3 text-sm px-4 py-3 rounded-lg ${refineResult[cityPlan.city_id]?.startsWith("暂时无法") || refineResult[cityPlan.city_id]?.startsWith("请求失败") ? "bg-red-900/30 text-red-300" : "bg-purple-900/30 text-purple-200"}`}>
                               {refineResult[cityPlan.city_id]}
                             </div>
                           )}
                           <div className="flex flex-wrap gap-2 mt-3">
-                            {["Replace with more food", "Add nightlife on last day", "Remove most expensive activity", "Swap for outdoor activities"].map((suggestion) => (
+                            {["安排更多美食", "最后一天增加夜生活", "移除最贵的活动", "换成户外活动"].map((suggestion) => (
                               <button
                                 key={suggestion}
                                 onClick={() => setRefineMessage(prev => ({ ...prev, [cityPlan.city_id]: suggestion }))}

@@ -182,7 +182,7 @@ async def evaluate(city_id: int, top_k: int):
         db.close()
         return
 
-    print(f"\nRouteMind — RAG vs SQL Retrieval Evaluation")
+    print(f"\nQingtu — RAG vs SQL Retrieval Evaluation")
     print(f"City ID: {city_id} | Total activities: {total_activities} | K={top_k}")
     print("=" * 72)
 

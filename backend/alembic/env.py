@@ -1,5 +1,11 @@
 """Alembic environment configuration."""
 from logging.config import fileConfig
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Match the application launcher: existing local DB settings override new-install defaults.
+# CI/process environment remains authoritative because override=False is the default.
+load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool

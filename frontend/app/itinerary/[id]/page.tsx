@@ -5,13 +5,18 @@ import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import dynamic from "next/dynamic";
 import Toast from "../../components/Toast";
+import type { DayRouteSummary } from "../../lib/routeTypes";
 import { api } from "../../lib/api";
+import {
+  getLocalizedDescription,
+  getLocalizedPlaceName,
+} from "../../lib/locale";
 
 const GoogleItineraryMap = dynamic(() => import("../../components/GoogleItineraryMap"), {
   ssr: false,
   loading: () => (
     <div className="w-full h-96 bg-gray-100 rounded-lg flex items-center justify-center">
-      <p className="text-gray-500">Loading map...</p>
+      <p className="text-gray-500">地图加载中…</p>
     </div>
   ),
 });
@@ -19,16 +24,19 @@ const GoogleItineraryMap = dynamic(() => import("../../components/GoogleItinerar
 interface ActivitySummary {
   id: number;
   name: string;
+  name_zh?: string | null;
   category: string;
   cost: number;
   duration: number;
   rating: number;
+  poi_source?: { rating_known?: boolean } | null;
   coordinates: {
     latitude: number;
     longitude: number;
   };
   tags?: string[] | null;
   description?: string | null;
+  description_zh?: string | null;
 }
 
 interface ItineraryBlock {
@@ -40,6 +48,7 @@ interface ItineraryBlock {
 }
 
 interface ItineraryDay {
+  route_summary?: DayRouteSummary | null;
   date: string;
   city_id?: number;
   city_name?: string;
@@ -111,14 +120,14 @@ export default function ItineraryDetailPage() {
       setItinerary(data);
     } catch (error) {
       console.error("Failed to fetch itinerary:", error);
-      setToast({ message: "Failed to load itinerary", type: "error" });
+      setToast({ message: "行程加载失败，请稍后重试", type: "error" });
     } finally {
       setLoading(false);
     }
   };
 
   const handleDelete = async () => {
-    if (!confirm("Are you sure you want to delete this itinerary?")) return;
+    if (!confirm("确定删除这份行程吗？此操作无法撤销。")) return;
 
     setIsDeleting(true);
     try {
@@ -127,7 +136,7 @@ export default function ItineraryDetailPage() {
       setToast({ message: "Itinerary deleted successfully", type: "success" });
       setTimeout(() => router.push("/my-itineraries"), 1500);
     } catch (error) {
-      setToast({ message: "Failed to delete itinerary", type: "error" });
+      setToast({ message: "删除失败，请稍后重试", type: "error" });
     } finally {
       setIsDeleting(false);
     }
@@ -142,13 +151,13 @@ export default function ItineraryDetailPage() {
       if (result.share_url) {
         const fullUrl = `${window.location.origin}${result.share_url}`;
         await navigator.clipboard.writeText(fullUrl);
-        setToast({ message: "Share link copied to clipboard!", type: "success" });
+        setToast({ message: "分享链接已复制", type: "success" });
 
         // Refresh to show updated share status
         fetchItinerary();
       }
     } catch (error) {
-      setToast({ message: "Failed to create share link", type: "error" });
+      setToast({ message: "分享链接生成失败", type: "error" });
     } finally {
       setIsSharing(false);
     }
@@ -156,7 +165,7 @@ export default function ItineraryDetailPage() {
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
-    return date.toLocaleDateString("en-US", {
+    return date.toLocaleDateString("zh-CN", {
       weekday: "long",
       month: "long",
       day: "numeric",
@@ -165,7 +174,7 @@ export default function ItineraryDetailPage() {
   };
 
   const formatTime = (timeStr: string) => {
-    return new Date(timeStr).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+    return new Date(timeStr).toLocaleTimeString("zh-CN", { hour: "numeric", minute: "2-digit", hour12: false });
   };
 
   const getCategoryColor = (category: string) => {
@@ -183,10 +192,10 @@ export default function ItineraryDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 flex items-center justify-center">
+      <div className="min-h-screen gradient-bg flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-purple-300 mx-auto mb-4"></div>
-          <p className="text-white text-xl">Loading itinerary...</p>
+          <p className="text-white text-xl">正在加载行程…</p>
         </div>
       </div>
     );
@@ -194,18 +203,18 @@ export default function ItineraryDetailPage() {
 
   if (!itinerary) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 flex items-center justify-center p-6">
+      <div className="min-h-screen gradient-bg flex items-center justify-center p-6">
         <div className="glass-card rounded-2xl p-12 text-center max-w-md">
           <div className="text-6xl mb-6">🔍</div>
-          <h1 className="text-3xl font-bold text-white mb-4">Itinerary Not Found</h1>
+          <h1 className="text-3xl font-bold text-white mb-4">暂时找不到这份行程</h1>
           <p className="text-gray-300 mb-8">
-            This itinerary doesn't exist or you don't have access to it.
+            行程可能已删除，或需要登录后查看。
           </p>
           <button
             onClick={() => router.push("/my-itineraries")}
             className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg font-semibold hover:opacity-90 transition-opacity"
           >
-            Back to My Itineraries
+            返回我的行程
           </button>
         </div>
       </div>
@@ -215,10 +224,10 @@ export default function ItineraryDetailPage() {
   const isMultiCity = (itinerary.trip_preferences.city_segments?.length ?? 0) > 1;
   const cityNames = isMultiCity
     ? [...new Set(itinerary.itinerary.days.map(d => d.city_name).filter(Boolean))].join(", ")
-    : "Your Itinerary";
+    : "我的晴途行程";
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900">
+    <div className="min-h-screen gradient-bg">
       {toast && (
         <Toast
           message={toast.message}
@@ -237,17 +246,17 @@ export default function ItineraryDetailPage() {
                   onClick={() => router.push("/my-itineraries")}
                   className="text-purple-300 hover:text-purple-200 transition-colors"
                 >
-                  ← Back
+                  ← 返回
                 </button>
               </div>
               <h1 className="text-3xl font-bold gradient-text mb-2">
-                {isMultiCity ? `Multi-City Trip: ${cityNames}` : cityNames}
+                {isMultiCity ? `多城市旅行： ${cityNames}` : cityNames}
               </h1>
               <p className="text-gray-300">
-                {itinerary.itinerary.days.length} days • ${itinerary.itinerary.summary.total_cost.toFixed(0)} total
+                {itinerary.itinerary.days.length} 天 · {itinerary.itinerary.summary.total_cost.toFixed(0)}（原币参考）
                 {itinerary.is_public && (
                   <span className="ml-3 px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-sm font-medium">
-                    Public • {itinerary.view_count} views
+                    已分享 · {itinerary.view_count} 次浏览
                   </span>
                 )}
               </p>
@@ -258,14 +267,14 @@ export default function ItineraryDetailPage() {
                 disabled={isSharing}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50"
               >
-                {isSharing ? "Sharing..." : itinerary.is_public ? "📋 Copy Link" : "🔗 Share"}
+                {isSharing ? "正在生成链接…" : itinerary.is_public ? "复制分享链接" : "分享行程"}
               </button>
               <button
                 onClick={handleDelete}
                 disabled={isDeleting}
                 className="px-4 py-2 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition-colors disabled:opacity-50"
               >
-                {isDeleting ? "Deleting..." : "Delete"}
+                {isDeleting ? "正在删除…" : "删除行程"}
               </button>
             </div>
           </div>
@@ -274,7 +283,7 @@ export default function ItineraryDetailPage() {
         {/* AI Narrative */}
         {itinerary.itinerary.narrative?.narrative_text && (
           <div className="glass-card rounded-2xl p-6 mb-6">
-            <h3 className="text-xl font-bold text-white mb-3">✨ AI Travel Guide</h3>
+            <h3 className="text-xl font-bold text-white mb-3">✨ 旅程小贴士</h3>
             <p className="text-gray-300 leading-relaxed whitespace-pre-line mb-4">
               {itinerary.itinerary.narrative.narrative_text}
             </p>
@@ -286,7 +295,7 @@ export default function ItineraryDetailPage() {
             {itinerary.itinerary.narrative.tips && (
               <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
                 <p className="text-blue-300 text-sm leading-relaxed whitespace-pre-line">
-                  💡 <strong>Tips:</strong> {itinerary.itinerary.narrative.tips}
+                  💡 <strong>出行提醒：</strong> {itinerary.itinerary.narrative.tips}
                 </p>
               </div>
             )}
@@ -296,19 +305,19 @@ export default function ItineraryDetailPage() {
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div className="glass-card rounded-xl p-4">
-            <p className="text-gray-400 text-sm mb-1">Total Budget</p>
+            <p className="text-gray-400 text-sm mb-1">费用参考</p>
             <p className="text-2xl font-bold text-white">
               ${itinerary.itinerary.summary.total_cost.toFixed(0)}
             </p>
           </div>
           <div className="glass-card rounded-xl p-4">
-            <p className="text-gray-400 text-sm mb-1">Per Day</p>
+            <p className="text-gray-400 text-sm mb-1">每天参考</p>
             <p className="text-2xl font-bold text-white">
               ${itinerary.itinerary.summary.avg_cost_per_day.toFixed(0)}
             </p>
           </div>
           <div className="glass-card rounded-xl p-4">
-            <p className="text-gray-400 text-sm mb-1">Pace</p>
+            <p className="text-gray-400 text-sm mb-1">旅行节奏</p>
             <p className="text-2xl font-bold text-white capitalize">
               {itinerary.itinerary.summary.pace_label}
             </p>
@@ -334,12 +343,22 @@ export default function ItineraryDetailPage() {
 
               {/* Google Map */}
               <div className="mb-6">
-                <GoogleItineraryMap activities={day.blocks.map(block => block.activity)} />
+                <GoogleItineraryMap activities={day.blocks.map(block => block.activity)} routeSummary={day.route_summary} />
               </div>
 
               {/* Activity Timeline */}
               <div className="space-y-3">
-                {day.blocks.map((block, blockIndex) => (
+                {day.blocks.map((block, blockIndex) => {
+                  const localizedName = getLocalizedPlaceName(
+                    block.activity.name,
+                    block.activity.name_zh
+                  );
+                  const localizedDescription = getLocalizedDescription(
+                    block.activity.description,
+                    block.activity.description_zh
+                  );
+
+                  return (
                   <div key={blockIndex} className="flex gap-4">
                     <div className="flex-shrink-0 w-20 text-right">
                       <p className="text-sm font-medium text-purple-300">
@@ -356,19 +375,19 @@ export default function ItineraryDetailPage() {
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2">
                             <h4 className="font-semibold text-white">
-                              {block.activity.name}
+                              {localizedName}
                             </h4>
                             <span className={`px-2 py-1 rounded text-xs font-medium ${getCategoryColor(block.activity.category)}`}>
                               {block.activity.category}
                             </span>
                           </div>
-                          {block.activity.description && (
+                          {localizedDescription && (
                             <p className="text-sm text-gray-400 mb-2">
-                              {block.activity.description}
+                              {localizedDescription}
                             </p>
                           )}
                           <div className="flex items-center gap-4 text-sm text-gray-400">
-                            <span>⭐ {block.activity.rating.toFixed(1)}</span>
+                            <span>{block.activity.poi_source?.rating_known === false ? "暂无评分" : `⭐ ${block.activity.rating.toFixed(1)}`}</span>
                             <span>⏱️ {block.activity.duration} min</span>
                             <span>💰 ${block.activity.cost}</span>
                           </div>
@@ -381,7 +400,8 @@ export default function ItineraryDetailPage() {
                       </div>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           ))}

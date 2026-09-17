@@ -61,3 +61,22 @@ rag_eval_results.json
 
 # Root-level stale lockfile
 /package-lock.json
+backend/.cache/
+
+# Local tooling, generated state and private planning documents
+.trae/
+.codex/
+.agents/
+*.tsbuildinfo
+docs/*.docx
+
+# Secrets and local database backups; keep template configuration
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.dump
+*.sqlite
+*.sqlite3

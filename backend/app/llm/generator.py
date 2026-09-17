@@ -1,7 +1,7 @@
 """LLM narrative generator for itineraries."""
 from app.llm.client import LLMClient
 from app.api.schemas import TripPreferences, NarrativeResult
-from app.core.optimizer import Itinerary
+from app.core.optimizer import Itinerary, get_activities_per_day
 
 
 def format_itinerary_for_llm(itinerary: Itinerary) -> str:
@@ -18,13 +18,17 @@ def format_itinerary_for_llm(itinerary: Itinerary) -> str:
     
     for day in itinerary.days:
         lines.append(f"Day {day.date}:")
+        if day.route_summary:
+            lines.append(f"交通参考 {day.route_summary['travel_minutes']} 分钟；结束/返回住宿时间 {day.route_summary['finish_time']}。路线方案为查询时快照，不保证未来班次。")
         for i, block in enumerate(day.blocks):
             time_str = block.start_time.split("T")[1][:5]  # Extract time
             lines.append(
-                f"  {time_str} - {block.activity.name} ({block.activity.category})"
+                f"  {time_str} - {block.activity.name_zh or block.activity.name} ({block.activity.category})"
             )
             if block.travel_time_from_previous:
                 lines.append(f"    (Travel time: {block.travel_time_from_previous} minutes)")
+            if block.activity.poi_source:
+                lines.append("    地点来自高德；金额是人均消费参考或类别估算，不是已核验门票。停留时长为估算，未来开放时间和预约状态未知。")
         lines.append("")
     
     return "\n".join(lines)
@@ -71,24 +75,36 @@ async def generate_narrative(
     """
     client = LLMClient()
     
-    system_prompt = """You are a concise travel assistant. Write a short, punchy trip overview — no more than 3-4 sentences. Then give 2-3 practical bullet-point tips specific to this trip. Do NOT recap the day-by-day schedule (it's already shown below). Be warm but brief."""
+    system_prompt = """你是一名中文旅行助手。请用简洁、自然的中文输出一段行程解读：
+1. 先用 3 到 4 句话概括这趟旅行的整体风格和亮点；
+2. 再补充 2 到 3 条实用建议；
+3. 不要逐天复述完整日程，因为页面里已经展示了详细安排；
+4. 风格友好、简洁、像真的旅行顾问，不要写得太空泛。
+5. 只能解释已提供的安排，不得声称路线是最短路线，不得编造实时路况、天气或预约信息。
+6. 没有安排景点的日期应说明自由活动，不要编造景点填满。"""
 
     itinerary_text = format_itinerary_for_llm(itinerary)
     preferences_text = format_preferences_for_llm(preferences)
 
-    user_prompt = f"""Trip details:
+    user_prompt = f"""以下是本次旅行信息：
 {preferences_text}
 
 {itinerary_text}
 
-Write:
-1. A 3-4 sentence intro that captures the vibe of this trip and gets the traveler excited.
-2. 2-3 short practical tips (packing, timing, money, local customs, etc.) specific to this destination and trip style.
+请输出中文内容：
+1. 一段 3 到 4 句的整体解读，说明这趟行程适合怎样体验；
+2. 2 到 3 条简短实用建议，可以涉及出发时间、穿着、预算、用餐、交通或当地习惯；
 
-Keep the total response under 150 words. No day-by-day recap."""
+总长度尽量控制在 150 字左右，不要按天逐条复述。"""
     
     # Generate narrative
     narrative_text = await client.generate_completion(system_prompt, user_prompt)
+    minimum, _ = get_activities_per_day(preferences.energy_level)
+    if any(len(day.blocks) < minimum for day in itinerary.days):
+        narrative_text = (
+            "规划提示：受当前景点数量、预算或开放时间限制，部分日期安排较少；"
+            "已避免跨天重复景点，空余时间可自由活动。\n\n" + narrative_text
+        )
     
     # For now, we'll put everything in narrative_text
     # In a more advanced version, we could parse the LLM response to extract
@@ -98,5 +114,8 @@ Keep the total response under 150 words. No day-by-day recap."""
         narrative_text=narrative_text,
         explanations=None,  # Could be extracted from LLM response
         tips=None,  # Could be extracted from LLM response
+        source="fallback" if client.failure_code else "ai",
+        provider="deepseek" if client.using_deepseek else "openai",
+        error_code=client.failure_code,
     )
 

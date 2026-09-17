@@ -40,7 +40,7 @@ router = APIRouter()
 @router.get("/cities", response_model=List[CityResponse])
 async def get_cities(db: Session = Depends(get_db)):
     """Get list of supported cities."""
-    cities = db.query(City).all()
+    cities = db.query(City).order_by(City.is_domestic.desc(), City.name_zh.asc().nullslast(), City.name.asc()).all()
     return cities
 
 
@@ -53,12 +53,15 @@ async def get_activities(city_id: int, db: Session = Depends(get_db)):
             {
                 "id": a.id,
                 "name": a.name,
+                "name_zh": a.name_zh,
                 "category": a.category,
                 "base_cost": a.base_cost,
                 "avg_duration_minutes": a.avg_duration_minutes,
                 "rating": a.rating,
                 "latitude": a.latitude,
                 "longitude": a.longitude,
+                "description": a.description,
+                "description_zh": a.description_zh,
             }
             for a in activities
         ]
@@ -362,8 +365,8 @@ async def get_shared_itinerary(
 def validate_trip_preferences(preferences: TripPreferences, db: Session):
     """Validate trip preferences and return city information."""
     # Validate date range
-    if preferences.end_date <= preferences.start_date:
-        raise InvalidDateRangeError("End date must be after start date")
+    if preferences.end_date < preferences.start_date:
+        raise InvalidDateRangeError("End date must not be before start date")
     
     # Validate trip length (max 30 days for v2)
     trip_days = (preferences.end_date - preferences.start_date).days + 1
@@ -439,6 +442,9 @@ async def _check_and_increment_generation_limit(
     through (fail-open) so users are never blocked by infrastructure issues.
     Raises HTTP 429 only when the limit is confirmed exceeded in Redis.
     """
+    if not settings.GENERATION_LIMIT_ENABLED:
+        return
+
     from app.core.cache import cache
 
     if user:
@@ -505,8 +511,16 @@ async def plan_itinerary(
         else:
             activities = all_activities[city_id]
 
+        from app.services.live_poi_service import enrich_city_catalog, attach_poi_provenance
+        from app.services.route_planning import apply_real_routes, validate_route_city, route_candidates
+        validate_route_city(preferences, cities[city_id])
+        activities, poi_search = await enrich_city_catalog(db, cities[city_id], preferences, activities)
+        activities = route_candidates(preferences, activities)
+
         # Build itinerary using optimizer
         itinerary = build_itinerary(preferences, activities, use_ortools=settings.USE_ORTOOLS)
+        attach_poi_provenance(itinerary, activities)
+        route_report = await apply_real_routes(itinerary, preferences, activities, cities[city_id])
         
         # Check for infeasible must-visit activities
         if hasattr(itinerary, 'infeasible_must_visits') and itinerary.infeasible_must_visits:
@@ -525,6 +539,8 @@ async def plan_itinerary(
             optimization_score=itinerary.optimization_score,
             confidence_score=itinerary.confidence_score,
             narrative=narrative,
+            poi_search=poi_search,
+            route_report=route_report,
         )
     else:
         # Multi-city (will be implemented with OR-Tools)

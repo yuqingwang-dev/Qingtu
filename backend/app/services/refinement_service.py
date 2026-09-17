@@ -48,8 +48,7 @@ async def parse_refinement_intent(
     The candidate_pool (activity names + categories from the DB) is included in the prompt
     to reduce hallucination — the model knows what's actually available.
     """
-    from openai import AsyncOpenAI
-    client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+    from app.llm.provider import chat_completion
 
     # Build compact itinerary text for the prompt
     itinerary_text = _format_itinerary_compact(itinerary)
@@ -87,8 +86,7 @@ Available activities in the city (choose replacement_candidates from these):
 
 Return JSON only."""
 
-    response = await client.chat.completions.create(
-        model=settings.OPENAI_MODEL,
+    response = await chat_completion(
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
@@ -355,6 +353,7 @@ def _apply_replace(
         activity=ActivitySummary(
             id=new_activity.id,
             name=new_activity.name,
+            name_zh=new_activity.name_zh if hasattr(new_activity, "name_zh") else None,
             category=new_activity.category,
             cost=new_activity.base_cost,
             duration=new_activity.avg_duration_minutes,
@@ -362,6 +361,7 @@ def _apply_replace(
             coordinates=Coordinates(latitude=new_activity.latitude, longitude=new_activity.longitude),
             tags=new_activity.tags if hasattr(new_activity, 'tags') else None,
             description=new_activity.description if hasattr(new_activity, 'description') else None,
+            description_zh=new_activity.description_zh if hasattr(new_activity, "description_zh") else None,
         ),
         travel_time_from_previous=target_block.travel_time_from_previous,
     )
@@ -383,6 +383,7 @@ def _apply_add(
         activity=ActivitySummary(
             id=new_activity.id,
             name=new_activity.name,
+            name_zh=new_activity.name_zh if hasattr(new_activity, "name_zh") else None,
             category=new_activity.category,
             cost=new_activity.base_cost,
             duration=new_activity.avg_duration_minutes,
@@ -390,6 +391,7 @@ def _apply_add(
             coordinates=Coordinates(latitude=new_activity.latitude, longitude=new_activity.longitude),
             tags=new_activity.tags if hasattr(new_activity, 'tags') else None,
             description=new_activity.description if hasattr(new_activity, 'description') else None,
+            description_zh=new_activity.description_zh if hasattr(new_activity, "description_zh") else None,
         ),
         travel_time_from_previous=None,
     )
@@ -644,12 +646,14 @@ def _apply_replace_from_venue(
         activity=ActivitySummary(
             id=-1,
             name=venue["name"],
+            name_zh=None,
             category=venue["category"],
             cost=venue["cost"],
             duration=venue.get("duration", 90),
             rating=venue["rating"],
             coordinates=Coordinates(latitude=venue["latitude"], longitude=venue["longitude"]),
             description=venue.get("address", ""),
+            description_zh=None,
         ),
         travel_time_from_previous=target_block.travel_time_from_previous,
     )
@@ -671,12 +675,14 @@ def _apply_add_from_venue(
         activity=ActivitySummary(
             id=-1,
             name=venue["name"],
+            name_zh=None,
             category=venue["category"],
             cost=venue["cost"],
             duration=venue.get("duration", 90),
             rating=venue["rating"],
             coordinates=Coordinates(latitude=venue["latitude"], longitude=venue["longitude"]),
             description=venue.get("address", ""),
+            description_zh=None,
         ),
         travel_time_from_previous=None,
     )

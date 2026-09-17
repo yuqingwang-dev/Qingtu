@@ -325,6 +325,7 @@ def build_itinerary(
             activity_summary = ActivitySummary(
                 id=best_activity.id,
                 name=best_activity.name,
+                name_zh=best_activity.name_zh if hasattr(best_activity, "name_zh") else None,
                 category=best_activity.category,
                 cost=best_activity.base_cost,
                 duration=best_activity.avg_duration_minutes,
@@ -335,6 +336,7 @@ def build_itinerary(
                 ),
                 tags=list(best_activity.tags) if hasattr(best_activity, 'tags') and isinstance(best_activity.tags, (list, set)) else None,
                 description=best_activity.description if hasattr(best_activity, 'description') else None,
+                description_zh=best_activity.description_zh if hasattr(best_activity, "description_zh") else None,
                 explanation=best_explanation,
             )
             

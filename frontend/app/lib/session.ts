@@ -3,7 +3,7 @@
  * Uses localStorage to persist session ID across page reloads.
  */
 
-const SESSION_STORAGE_KEY = 'routemind_session_id';
+import { SESSION_STORAGE_KEY, LEGACY_SESSION_STORAGE_KEY, readBrandedStorage } from './brandedStorage';
 
 /**
  * Generate a UUID v4 session ID.
@@ -25,7 +25,7 @@ export function getSessionId(): string {
     return '';
   }
 
-  let sessionId = localStorage.getItem(SESSION_STORAGE_KEY);
+  let sessionId = readBrandedStorage(localStorage, SESSION_STORAGE_KEY, LEGACY_SESSION_STORAGE_KEY);
 
   if (!sessionId) {
     sessionId = generateSessionId();
@@ -49,6 +49,7 @@ export function setSessionId(sessionId: string): void {
 export function clearSessionId(): void {
   if (typeof window === 'undefined') return;
   localStorage.removeItem(SESSION_STORAGE_KEY);
+  localStorage.removeItem(LEGACY_SESSION_STORAGE_KEY);
 }
 
 /**
@@ -56,5 +57,5 @@ export function clearSessionId(): void {
  */
 export function hasSessionId(): boolean {
   if (typeof window === 'undefined') return false;
-  return localStorage.getItem(SESSION_STORAGE_KEY) !== null;
+  return readBrandedStorage(localStorage, SESSION_STORAGE_KEY, LEGACY_SESSION_STORAGE_KEY) !== null;
 }

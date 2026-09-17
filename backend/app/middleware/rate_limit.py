@@ -38,11 +38,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         return request.client.host if request.client else "unknown"
     
     async def dispatch(self, request: Request, call_next):
-        # Only rate limit /plan-itinerary endpoint
-        if request.url.path.endswith("/plan-itinerary") and request.method == "POST":
+        is_knowledge = request.url.path.endswith("/knowledge/ask")
+        if (request.url.path.endswith("/plan-itinerary") or is_knowledge) and request.method == "POST":
             self._cleanup_old_requests()
             
             client_ip = self._get_client_ip(request)
+            if is_knowledge:
+                # Separate budget; caller-supplied forwarded headers cannot bypass it.
+                client_ip = "knowledge:" + (request.client.host if request.client else "unknown")
             now = datetime.now()
             minute_ago = now - timedelta(minutes=1)
             

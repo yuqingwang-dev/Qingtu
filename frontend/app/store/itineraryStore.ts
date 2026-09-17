@@ -3,7 +3,8 @@
  */
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { ITINERARY_STORAGE_KEY, LEGACY_ITINERARY_STORAGE_KEY, readBrandedStorage } from '../lib/brandedStorage';
 import type { Itinerary, TripPreferences, SavedItinerary, ItineraryListItem } from '../lib/api';
 
 interface ItineraryState {
@@ -80,7 +81,17 @@ export const useItineraryStore = create<ItineraryState>()(
         }),
     }),
     {
-      name: 'routemind-itinerary-storage',
+      name: ITINERARY_STORAGE_KEY,
+      storage: createJSONStorage(() => ({
+        getItem: (key) => typeof window === 'undefined' ? null : readBrandedStorage(localStorage, key, LEGACY_ITINERARY_STORAGE_KEY),
+        setItem: (key, value) => { if (typeof window !== 'undefined') localStorage.setItem(key, value); },
+        removeItem: (key) => {
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem(key);
+            localStorage.removeItem(LEGACY_ITINERARY_STORAGE_KEY);
+          }
+        },
+      })),
       // Only persist saved itineraries list, not the current generation
       partialize: (state) => ({
         savedItineraries: state.savedItineraries,

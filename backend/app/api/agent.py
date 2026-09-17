@@ -6,6 +6,12 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.api.schemas import AgentPlanRequest, AgentPlanResponse
 from app.config import settings
+from app.llm.provider import get_chat_provider, LLMRequestError
+from app.api.routes import _check_and_increment_generation_limit
+from app.core.session import get_session_id
+from app.core.auth import get_current_user
+from app.db.models import User
+from typing import Optional
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -15,6 +21,8 @@ logger = logging.getLogger(__name__)
 async def agent_plan(
     request: AgentPlanRequest,
     db: Session = Depends(get_db),
+    session_id: str = Depends(get_session_id),
+    user: Optional[User] = Depends(get_current_user),
 ):
     """
     Plan an itinerary using an AI agent with tool calling.
@@ -31,8 +39,8 @@ async def agent_plan(
     than /plan-itinerary. Use it for portfolio demos or when you want to
     show agentic reasoning.
     """
-    if not settings.OPENAI_API_KEY:
-        raise HTTPException(status_code=503, detail="LLM not configured — OPENAI_API_KEY missing")
+    if not get_chat_provider().api_key:
+        raise HTTPException(status_code=503, detail="所选模型服务尚未配置密钥")
 
     preferences = request.preferences
 
@@ -44,9 +52,14 @@ async def agent_plan(
         raise HTTPException(status_code=400, detail="destination_city_id or city_segments required")
 
     from app.services.agent_service import run_agent
+    await _check_and_increment_generation_limit(session_id, user)
     try:
-        result = await run_agent(preferences, db)
+        result = await run_agent(preferences, db, request.user_message)
         return result
+    except HTTPException:
+        raise
+    except LLMRequestError as e:
+        raise HTTPException(status_code=503, detail={"error_code": e.code, "message": "模型调用失败，请稍后重试"}) from None
     except Exception as e:
-        logger.error(f"Agent planning failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Agent planning failed: {str(e)}")
+        logger.error("Agent planning failed: %s", type(e).__name__)
+        raise HTTPException(status_code=500, detail="Agent 规划失败，请稍后重试") from None

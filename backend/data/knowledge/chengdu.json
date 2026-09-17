@@ -1,0 +1,60 @@
+[
+  {
+    "source_key": "panda-visit", "title": "成都大熊猫繁育研究基地 · 游园须知",
+    "url": "https://m.panda.org.cn/yd/service/notice/", "city": "成都", "poi_name": "成都大熊猫繁育研究基地",
+    "aliases": ["熊猫基地", "成都大熊猫繁育研究基地", "大熊猫繁育研究基地", "Chengdu Research Base of Giant Panda Breeding"],
+    "reviewed_on": "2026-09-17", "expires_on": "2026-10-17",
+    "chunks": [
+      {"key": "photo", "topic": "拍照", "content": "观看大熊猫时请关闭闪光灯，勿高声喧哗；不要向动物投喂或投掷物品。"},
+      {"key": "mobility", "topic": "入园限制", "content": "园内禁止使用无人机、轮滑鞋、滑板、滑板车、平衡车和自行车。"},
+      {"key": "pets", "topic": "宠物", "content": "宠物猫狗不得入园。导盲犬有证件核验、工作人员陪同和与动物保持距离的专门规定，请提前核对官网要求。"},
+      {"key": "closure", "topic": "开放", "content": "恶劣天气、动物保护、设施维护或园区管理可能导致部分区域关闭，部分动物也可能无法观看；请以现场公告为准。"}
+    ]
+  },
+  {
+    "source_key": "panda-booking", "title": "成都大熊猫繁育研究基地 · 官方入园提示",
+    "url": "https://www.panda.org.cn/cn/", "city": "成都", "poi_name": "成都大熊猫繁育研究基地",
+    "aliases": ["熊猫基地", "成都大熊猫繁育研究基地", "大熊猫繁育研究基地", "Chengdu Research Base of Giant Panda Breeding"],
+    "reviewed_on": "2026-09-17", "expires_on": "2026-10-17",
+    "chunks": [
+      {"key": "booking", "topic": "预约", "content": "通常需线上实名预约购票；符合政策的60周岁及以上老人、6周岁及以下或身高1.3米及以下儿童有免预约安排，须按规定出示有效证件。特殊情况线下购票还取决于余票。"},
+      {"key": "hours", "topic": "开放", "content": "官网当前列示上午入园时段为7:30—12:00，下午为12:00—17:00，闭园时间18:00。节假日或临时调整请出发前再查官方公告。"}
+    ]
+  },
+  {
+    "source_key": "wuhou-visit", "title": "成都武侯祠博物馆 · 参观须知",
+    "url": "https://wuhouci.net.cn/cgxz", "city": "成都", "poi_name": "武侯祠",
+    "aliases": ["武侯祠", "成都武侯祠博物馆", "武侯祠博物馆", "Wuhou Shrine"],
+    "reviewed_on": "2026-09-17", "expires_on": "2026-10-17",
+    "chunks": [
+      {"key": "steps", "topic": "无障碍", "content": "馆内台阶较多，部分坡道较陡。带老人、儿童或行动不便的同行者时，请留意脚下并做好陪同；资料不能保证全程无障碍。"},
+      {"key": "vehicles", "topic": "入园限制", "content": "参观区域限制车辆进入，婴儿车和轮椅属列明的例外；其他代步设备请提前向场馆确认。"},
+      {"key": "pets", "topic": "宠物", "content": "宠物不得进入参观区域，持证导盲犬除外。"},
+      {"key": "luggage", "topic": "行李", "content": "官网问答列明游客中心有自助寄存，正门内右侧讲解咨询处提供人工寄存。大件或特殊物品请现场确认。"}
+    ]
+  },
+  {
+    "source_key": "dufu-visit", "title": "成都杜甫草堂博物馆 · 参观须知",
+    "url": "https://www.cddfct.cn/go-c22.htm", "city": "成都", "poi_name": "杜甫草堂",
+    "aliases": ["杜甫草堂", "成都杜甫草堂博物馆", "杜甫草堂博物馆", "Du Fu Thatched Cottage"],
+    "reviewed_on": "2026-09-17", "expires_on": "2026-10-17",
+    "chunks": [
+      {"key": "ticket", "topic": "预约", "content": "入馆需要有效门票（含电子票）或按规定核验证件，并接受安检。门票仅限一次使用，离馆后再次入馆需重新购票。"},
+      {"key": "luggage", "topic": "行李", "content": "大件行李需寄存，贵重物品自行保管；电动代步设备不得带入馆内。"},
+      {"key": "photo", "topic": "拍照", "content": "拍摄时不要使用闪光灯，不要触摸文物或攀爬护栏；无人机使用需获得批准。"},
+      {"key": "steps", "topic": "无障碍", "content": "园内部分地面有青苔、可能湿滑，带老人和儿童参观时请注意脚下并做好陪同；这不是全程无障碍通行承诺。"},
+      {"key": "pets", "topic": "宠物", "content": "宠物不得入馆，导盲犬等特殊工作犬按场馆规定例外，需牵引并做好清洁。"}
+    ]
+  },
+  {
+    "source_key": "dufu-tickets", "title": "成都杜甫草堂博物馆 · 购票须知",
+    "url": "https://www.cddfct.cn/go-c20.htm", "city": "成都", "poi_name": "杜甫草堂",
+    "aliases": ["杜甫草堂", "成都杜甫草堂博物馆", "杜甫草堂博物馆", "Du Fu Thatched Cottage"],
+    "reviewed_on": "2026-09-17", "expires_on": "2026-10-17",
+    "chunks": [
+      {"key": "hours", "topic": "开放", "content": "常规开放时间为9:00—18:00，17:00停止售票。劳动节、暑期及国庆等时段有延时安排，具体以官方最新公告为准。"},
+      {"key": "price", "topic": "票价", "content": "官网列示全价门票50元、半价票25元。半价适用条件及有效证件须按官方购票须知核对，不代表所有游客均可享受半价。"},
+      {"key": "annual", "topic": "预约", "content": "年票为实名专人使用，每次入馆需出示办理时的身份证原件，不能多人共用。"}
+    ]
+  }
+]

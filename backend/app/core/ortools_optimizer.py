@@ -24,6 +24,7 @@ from app.core.optimizer import (
     get_day_start_time,
     is_activity_available,
 )
+from app.core.daily_route import schedule_daily_route, feasible_daily_candidates
 
 
 def build_itinerary_ortools(
@@ -66,6 +67,9 @@ def build_itinerary_ortools(
             continue
         available_activities.append(activity)
     
+    # Do not reserve a day's slot for a POI that cannot be visited at all.
+    available_activities = feasible_daily_candidates(available_activities, preferences)
+
     # If we have must-visit activities, ensure they're included
     must_visit_activities = [
         a for a in available_activities if a.name in must_visit_names
@@ -102,14 +106,32 @@ def build_itinerary_ortools(
         )
         model.Add(daily_cost <= int(daily_budget_cents * 1.2))  # Allow 20% flexibility
     
-    # 2. Activity count per day (based on energy level)
+    # 2. Spread scarce POIs across the requested days, without requiring repeats.
+    # Under-filled days are allowed (e.g. an unaffordable or small catalog).
+    daily_counts = []
+    shortfalls = []
+    target_min = min(min_activities, len(available_activities) // trip_days)
+    daily_cap = min(max_activities, (len(available_activities) + trip_days - 1) // trip_days)
     for day in range(trip_days):
-        daily_count = sum(
+        daily_count = model.NewIntVar(0, daily_cap, f"count_{day}")
+        model.Add(daily_count == sum(
             activity_selected[(day, act_idx)]
             for act_idx in range(len(available_activities))
-        )
-        model.Add(daily_count >= min_activities)
-        model.Add(daily_count <= max_activities)
+        ))
+        daily_counts.append(daily_count)
+        if len(available_activities) >= trip_days:
+            model.Add(daily_count >= 1)
+        shortfall = model.NewIntVar(0, target_min, f"shortfall_{day}")
+        model.Add(shortfall >= target_min - daily_count)
+        shortfalls.append(shortfall)
+        model.Add(sum(
+            activity_selected[(day, i)] * a.avg_duration_minutes
+            for i, a in enumerate(available_activities)
+        ) <= 13 * 60)
+    for day in range(1, trip_days):
+        # Days are interchangeable at this stage; keep the fuller days first.
+        model.Add(daily_counts[day - 1] >= daily_counts[day])
+    model.Add(daily_counts[0] - daily_counts[-1] <= 1)
     
     # 3. Must-visit activities must be included somewhere
     for must_visit_name in must_visit_names:
@@ -128,11 +150,13 @@ def build_itinerary_ortools(
                 ) >= 1
             )
     
-    # 4. No duplicate activities in same day (unless must-visit)
-    for day in range(trip_days):
-        for act_idx in range(len(available_activities)):
-            # Can only select once per day
-            model.Add(activity_selected[(day, act_idx)] <= 1)
+    # 4. Each POI may appear at most once over the ENTIRE trip.
+    indices_by_id = {}
+    for act_idx, activity in enumerate(available_activities):
+        indices_by_id.setdefault(activity.id, []).append(act_idx)
+    for indices in indices_by_id.values():
+        model.Add(sum(activity_selected[(day, i)]
+                      for day in range(trip_days) for i in indices) <= 1)
     
     # Objective: Maximize total utility score
     # Utility = sum of activity scores weighted by rating, category match, etc.
@@ -159,11 +183,30 @@ def build_itinerary_ortools(
                 activity_selected[(day, act_idx)] * score_int  # Scale for integer solver
             )
     
-    model.Maximize(sum(total_utility))
+    # Prefer nearby POIs on the same day. Bound the quadratic model size;
+    # larger catalogs still retain global uniqueness and daily route ordering.
+    spread_penalties = []
+    if len(available_activities) <= 60:
+        for i, first in enumerate(available_activities):
+            for j in range(i + 1, len(available_activities)):
+                second = available_activities[j]
+                distance = haversine_distance(
+                    first.latitude, first.longitude, second.latitude, second.longitude
+                )
+                weight = round(min(distance, 50) * 60)
+                for day in range(trip_days):
+                    together = model.NewBoolVar(f"pair_{day}_{i}_{j}")
+                    model.AddMultiplicationEquality(together, [
+                        activity_selected[(day, i)], activity_selected[(day, j)]
+                    ])
+                    spread_penalties.append(weight * together)
+    model.Maximize(sum(total_utility) - sum(spread_penalties) - 20000 * sum(shortfalls))
     
     # Solve
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = 10.0  # Limit solve time
+    solver.parameters.num_search_workers = 1
+    solver.parameters.random_seed = 0
     status = solver.Solve(model)
     
     # If solution found, build itinerary
@@ -184,79 +227,18 @@ def build_itinerary_ortools(
                 if solver.Value(activity_selected[(day, act_idx)]) == 1
             ]
             
-            if not selected_activities:
-                continue
-            
-            # Order activities using greedy (simpler than full TSP)
+            # Order today's selected set by distance, respecting opening hours.
             blocks = []
-            current_time = day_start
             daily_cost = 0.0
             daily_duration = 0
-            previous_activity: Optional[Activity] = None
-            used_in_day = set()
-            
-            while selected_activities and len(blocks) < max_activities:
-                day_end = day_start.replace(hour=22, minute=0)
-                available_time = (day_end - current_time).total_seconds() / 60
-                
-                if available_time < 30:
-                    break
-                
-                # Find best next activity
-                best_activity = None
-                best_score = -1
-                best_travel_time = 0
-                
-                day_state = {
-                    "current_cost": daily_cost,
-                    "available_time_minutes": int(available_time),
-                }
-                
-                for activity in selected_activities:
-                    if activity.id in used_in_day:
-                        continue
-                    
-                    if not is_activity_available(activity, current_time):
-                        continue
-                    
-                    travel_time = 0
-                    if previous_activity:
-                        distance = haversine_distance(
-                            previous_activity.latitude,
-                            previous_activity.longitude,
-                            activity.latitude,
-                            activity.longitude,
-                        )
-                        travel_time = estimate_travel_time(
-                            distance, preferences.travel_mode
-                        )
-                    
-                    total_time_needed = travel_time + activity.avg_duration_minutes
-                    if total_time_needed > available_time:
-                        continue
-                    
-                    score = score_activity(
-                        activity, preferences, day_state, previous_activity
-                    )
-                    
-                    if score > best_score:
-                        best_score = score
-                        best_activity = activity
-                        best_travel_time = travel_time
-                
-                if best_activity is None:
-                    break
-                
-                # Add activity
-                current_time += timedelta(minutes=best_travel_time)
-                start_time = current_time
-                end_time = start_time + timedelta(
-                    minutes=best_activity.avg_duration_minutes
-                )
-                
+            schedule = schedule_daily_route(
+                selected_activities, day_start, preferences.travel_mode, must_visit_names
+            )
+            for best_activity, start_time, end_time, best_travel_time in schedule:
                 activity_summary = ActivitySummary(
                     id=best_activity.id,
                     name=best_activity.name,
+                    name_zh=best_activity.name_zh if hasattr(best_activity, "name_zh") else None,
                     category=best_activity.category,
                     cost=best_activity.base_cost,
                     duration=best_activity.avg_duration_minutes,
@@ -267,6 +249,7 @@ def build_itinerary_ortools(
                     ),
                     tags=best_activity.tags if hasattr(best_activity, 'tags') else None,
                     description=best_activity.description if hasattr(best_activity, 'description') else None,
+                    description_zh=best_activity.description_zh if hasattr(best_activity, "description_zh") else None,
                 )
                 
                 block = ItineraryBlock(
@@ -277,21 +260,19 @@ def build_itinerary_ortools(
                 )
                 
                 blocks.append(block)
-                current_time = end_time
                 daily_cost += best_activity.base_cost
-                daily_duration += best_activity.avg_duration_minutes + best_travel_time
-                previous_activity = best_activity
-                used_in_day.add(best_activity.id)
-                selected_activities.remove(best_activity)
-            
-            if blocks:
-                day_obj = ItineraryDay(
-                    date=current_date,
-                    total_cost=daily_cost,
-                    total_duration_minutes=daily_duration,
-                    blocks=blocks,
-                )
-                itinerary.days.append(day_obj)
+                daily_duration = int((end_time - day_start).total_seconds() / 60)
+
+            itinerary.days.append(ItineraryDay(
+                date=current_date,
+                total_cost=daily_cost,
+                total_duration_minutes=daily_duration,
+                blocks=blocks,
+            ))
+    else:
+        # Preserve the established fallback instead of returning a blank plan.
+        from app.core.optimizer import build_itinerary
+        return build_itinerary(preferences, activities, use_ortools=False)
     
     # Calculate summary (same as greedy optimizer)
     if itinerary.days:
@@ -321,7 +302,7 @@ def build_itinerary_ortools(
         )
         
         # Calculate scores
-        budget_utilization = min(1.0, total_cost / (daily_budget * len(itinerary.days)))
+        budget_utilization = min(1.0, total_cost / max(1, daily_budget * len(itinerary.days)))
         category_coverage = len(categories_covered) / max(1, len(preferences.preferred_categories) if preferences.preferred_categories else 7)
         avg_rating = sum(
             block.activity.rating

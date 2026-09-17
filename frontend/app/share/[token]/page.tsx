@@ -4,12 +4,17 @@ import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import type { DayRouteSummary } from "../../lib/routeTypes";
+import {
+  getLocalizedDescription,
+  getLocalizedPlaceName,
+} from "../../lib/locale";
 
 const GoogleItineraryMap = dynamic(() => import("../../components/GoogleItineraryMap"), {
   ssr: false,
   loading: () => (
     <div className="w-full h-96 bg-gray-100 rounded-lg flex items-center justify-center">
-      <p className="text-gray-500">Loading map...</p>
+      <p className="text-gray-500">地图加载中…</p>
     </div>
   ),
 });
@@ -17,16 +22,19 @@ const GoogleItineraryMap = dynamic(() => import("../../components/GoogleItinerar
 interface ActivitySummary {
   id: number;
   name: string;
+  name_zh?: string | null;
   category: string;
   cost: number;
   duration: number;
   rating: number;
+  poi_source?: { rating_known?: boolean } | null;
   coordinates: {
     latitude: number;
     longitude: number;
   };
   tags?: string[] | null;
   description?: string | null;
+  description_zh?: string | null;
 }
 
 interface ItineraryBlock {
@@ -38,6 +46,7 @@ interface ItineraryBlock {
 }
 
 interface ItineraryDay {
+  route_summary?: DayRouteSummary | null;
   date: string;
   city_id?: number;
   city_name?: string;
@@ -94,7 +103,7 @@ export default function SharePage() {
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/share/${token}`);
       if (!response.ok) {
-        throw new Error("Itinerary not found or has been made private");
+        throw new Error("行程不存在或已取消分享");
       }
       const data = await response.json();
       setItinerary(data);
@@ -107,7 +116,7 @@ export default function SharePage() {
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
-    return date.toLocaleDateString("en-US", {
+    return date.toLocaleDateString("zh-CN", {
       weekday: "long",
       month: "long",
       day: "numeric",
@@ -116,7 +125,7 @@ export default function SharePage() {
   };
 
   const formatTime = (timeStr: string) => {
-    return new Date(timeStr).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+    return new Date(timeStr).toLocaleTimeString("zh-CN", { hour: "numeric", minute: "2-digit", hour12: false });
   };
 
   const getCategoryColor = (category: string) => {
@@ -134,10 +143,10 @@ export default function SharePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 flex items-center justify-center">
+      <div className="min-h-screen gradient-bg flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-purple-300 mx-auto mb-4"></div>
-          <p className="text-white text-xl">Loading shared itinerary...</p>
+          <p className="text-white text-xl">正在打开分享的旅程…</p>
         </div>
       </div>
     );
@@ -145,18 +154,18 @@ export default function SharePage() {
 
   if (error || !itinerary) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 flex items-center justify-center p-6">
+      <div className="min-h-screen gradient-bg flex items-center justify-center p-6">
         <div className="glass-card rounded-2xl p-12 text-center max-w-md">
           <div className="text-6xl mb-6">🔒</div>
-          <h1 className="text-3xl font-bold text-white mb-4">Itinerary Not Found</h1>
+          <h1 className="text-3xl font-bold text-white mb-4">暂时找不到这份行程</h1>
           <p className="text-gray-300 mb-8">
-            {error || "This itinerary doesn't exist or has been made private."}
+            {error || "这份行程不存在，或分享者已将它设为私密。"}
           </p>
           <Link
             href="/"
             className="inline-block px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg font-semibold hover:opacity-90 transition-opacity"
           >
-            Plan Your Own Trip
+            规划我的旅行
           </Link>
         </div>
       </div>
@@ -166,10 +175,10 @@ export default function SharePage() {
   const isMultiCity = (itinerary.trip_preferences.city_segments?.length ?? 0) > 1;
   const cityNames = isMultiCity
     ? [...new Set(itinerary.itinerary.days.map(d => d.city_name).filter(Boolean))].join(", ")
-    : "Shared Itinerary";
+    : "分享的晴途行程";
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900">
+    <div className="min-h-screen gradient-bg">
       <div className="container mx-auto px-4 py-8 pt-24">
         {/* Header */}
         <div className="glass-card rounded-2xl p-8 mb-6">
@@ -177,14 +186,14 @@ export default function SharePage() {
             <div>
               <div className="flex items-center gap-3 mb-2">
                 <h1 className="text-3xl font-bold gradient-text">
-                  {isMultiCity ? `Multi-City Trip: ${cityNames}` : cityNames}
+                  {isMultiCity ? `多城市旅行： ${cityNames}` : cityNames}
                 </h1>
                 <span className="px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-sm font-medium">
                   Public
                 </span>
               </div>
               <p className="text-gray-300">
-                {itinerary.itinerary.days.length} days • ${itinerary.itinerary.summary.total_cost.toFixed(0)} total •
+                {itinerary.itinerary.days.length} 天 · {itinerary.itinerary.summary.total_cost.toFixed(0)}（原币参考） •
                 {" "}{itinerary.view_count} {itinerary.view_count === 1 ? "view" : "views"}
               </p>
             </div>
@@ -192,7 +201,7 @@ export default function SharePage() {
               href="/"
               className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg font-semibold hover:opacity-90 transition-opacity"
             >
-              Plan Your Own Trip
+              规划我的旅行
             </Link>
           </div>
         </div>
@@ -200,7 +209,7 @@ export default function SharePage() {
         {/* AI Narrative */}
         {itinerary.itinerary.narrative?.narrative_text && (
           <div className="glass-card rounded-2xl p-6 mb-6">
-            <h3 className="text-xl font-bold text-white mb-3">✨ AI Travel Guide</h3>
+            <h3 className="text-xl font-bold text-white mb-3">✨ 旅程小贴士</h3>
             <p className="text-gray-300 leading-relaxed whitespace-pre-line mb-4">
               {itinerary.itinerary.narrative.narrative_text}
             </p>
@@ -212,7 +221,7 @@ export default function SharePage() {
             {itinerary.itinerary.narrative.tips && (
               <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
                 <p className="text-blue-300 text-sm leading-relaxed whitespace-pre-line">
-                  💡 <strong>Tips:</strong> {itinerary.itinerary.narrative.tips}
+                  💡 <strong>出行提醒：</strong> {itinerary.itinerary.narrative.tips}
                 </p>
               </div>
             )}
@@ -222,19 +231,19 @@ export default function SharePage() {
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div className="glass-card rounded-xl p-4">
-            <p className="text-gray-400 text-sm mb-1">Total Budget</p>
+            <p className="text-gray-400 text-sm mb-1">费用参考</p>
             <p className="text-2xl font-bold text-white">
               ${itinerary.itinerary.summary.total_cost.toFixed(0)}
             </p>
           </div>
           <div className="glass-card rounded-xl p-4">
-            <p className="text-gray-400 text-sm mb-1">Per Day</p>
+            <p className="text-gray-400 text-sm mb-1">每天参考</p>
             <p className="text-2xl font-bold text-white">
               ${itinerary.itinerary.summary.avg_cost_per_day.toFixed(0)}
             </p>
           </div>
           <div className="glass-card rounded-xl p-4">
-            <p className="text-gray-400 text-sm mb-1">Pace</p>
+            <p className="text-gray-400 text-sm mb-1">旅行节奏</p>
             <p className="text-2xl font-bold text-white capitalize">
               {itinerary.itinerary.summary.pace_label}
             </p>
@@ -260,12 +269,22 @@ export default function SharePage() {
 
               {/* Google Map */}
               <div className="mb-6">
-                <GoogleItineraryMap activities={day.blocks.map(block => block.activity)} />
+                <GoogleItineraryMap activities={day.blocks.map(block => block.activity)} routeSummary={day.route_summary} />
               </div>
 
               {/* Activity Timeline */}
               <div className="space-y-3">
-                {day.blocks.map((block, blockIndex) => (
+                {day.blocks.map((block, blockIndex) => {
+                  const localizedName = getLocalizedPlaceName(
+                    block.activity.name,
+                    block.activity.name_zh
+                  );
+                  const localizedDescription = getLocalizedDescription(
+                    block.activity.description,
+                    block.activity.description_zh
+                  );
+
+                  return (
                   <div key={blockIndex} className="flex gap-4">
                     <div className="flex-shrink-0 w-20 text-right">
                       <p className="text-sm font-medium text-purple-300">
@@ -282,19 +301,19 @@ export default function SharePage() {
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2">
                             <h4 className="font-semibold text-white">
-                              {block.activity.name}
+                              {localizedName}
                             </h4>
                             <span className={`px-2 py-1 rounded text-xs font-medium ${getCategoryColor(block.activity.category)}`}>
                               {block.activity.category}
                             </span>
                           </div>
-                          {block.activity.description && (
+                          {localizedDescription && (
                             <p className="text-sm text-gray-400 mb-2">
-                              {block.activity.description}
+                              {localizedDescription}
                             </p>
                           )}
                           <div className="flex items-center gap-4 text-sm text-gray-400">
-                            <span>⭐ {block.activity.rating.toFixed(1)}</span>
+                            <span>{block.activity.poi_source?.rating_known === false ? "暂无评分" : `⭐ ${block.activity.rating.toFixed(1)}`}</span>
                             <span>⏱️ {block.activity.duration} min</span>
                             <span>💰 ${block.activity.cost}</span>
                           </div>
@@ -307,7 +326,8 @@ export default function SharePage() {
                       </div>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           ))}
@@ -319,7 +339,7 @@ export default function SharePage() {
             Love this itinerary?
           </h3>
           <p className="text-gray-300 mb-6">
-            Create your own personalized travel itinerary with RouteMind AI
+            用晴途 Qingtu，安排你的下一次出发
           </p>
           <Link
             href="/"

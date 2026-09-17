@@ -1,6 +1,6 @@
 """Pydantic schemas for API requests and responses."""
-from pydantic import BaseModel, Field
-from typing import Optional, List
+from pydantic import BaseModel, Field, model_validator, computed_field
+from typing import Optional, List, Literal
 from datetime import date, time
 from enum import Enum
 
@@ -64,6 +64,15 @@ class CitySegment(BaseModel):
     travel_time_from_previous_hours: Optional[int] = Field(default=None, description="Travel time from previous city in hours")
 
 
+class LodgingLocation(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    city_id: int = Field(gt=0)
+    latitude: float = Field(ge=18, le=54)
+    longitude: float = Field(ge=73, le=135)
+    provider_poi_id: Optional[str] = None
+    coordinate_system: Literal["GCJ02"] = "GCJ02"
+
+
 class TripPreferences(BaseModel):
     start_date: date
     end_date: date
@@ -77,6 +86,22 @@ class TripPreferences(BaseModel):
     energy_level: EnergyLevel
     travel_mode: TravelMode
     constraints: Optional[Constraints] = Field(default=None)
+    use_real_routes: bool = False
+    lodging: Optional[LodgingLocation] = None
+    daily_start_time: str = Field(default="10:00", pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$")
+    daily_end_time: str = Field(default="20:00", pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$")
+    return_to_lodging: bool = True
+
+    @model_validator(mode="after")
+    def validate_route_preferences(self):
+        if self.use_real_routes:
+            if not self.lodging or self.lodging.city_id != self.destination_city_id or self.city_segments:
+                raise ValueError("真实路线模式需要选择当前城市的住宿起点，且仅支持单城市")
+            if self.daily_end_time <= self.daily_start_time:
+                raise ValueError("每日结束时间必须晚于出发时间，暂不支持跨夜")
+            if not 1 <= (self.end_date - self.start_date).days + 1 <= 3:
+                raise ValueError("真实路线首版支持1至3天；更长行程请使用常规规划")
+        return self
     
     def get_city_ids(self) -> List[int]:
         """Get list of city IDs from either single city or multi-city segments."""
@@ -109,6 +134,7 @@ class SelectionExplanation(BaseModel):
 class ActivitySummary(BaseModel):
     id: int
     name: str
+    name_zh: Optional[str] = None
     category: str
     cost: float
     duration: int  # minutes
@@ -116,7 +142,9 @@ class ActivitySummary(BaseModel):
     coordinates: Coordinates
     tags: Optional[List[str]] = Field(default=None, description="Activity tags like family_friendly, wheelchair_accessible")
     description: Optional[str] = Field(default=None, description="Activity description")
+    description_zh: Optional[str] = Field(default=None, description="Chinese activity description")
     explanation: Optional[SelectionExplanation] = Field(default=None, description="Why this activity was chosen")
+    poi_source: Optional[dict] = None
 
     class Config:
         from_attributes = True
@@ -137,6 +165,7 @@ class ItineraryDay(BaseModel):
     total_cost: float
     total_duration_minutes: int
     blocks: List[ItineraryBlock]
+    route_summary: Optional[dict] = None
 
 
 class ItinerarySummary(BaseModel):
@@ -150,6 +179,9 @@ class NarrativeResult(BaseModel):
     narrative_text: str
     explanations: Optional[str] = None
     tips: Optional[str] = None
+    source: Optional[str] = None
+    provider: Optional[str] = None
+    error_code: Optional[str] = None
 
 
 class ItineraryResponse(BaseModel):
@@ -158,14 +190,27 @@ class ItineraryResponse(BaseModel):
     optimization_score: float = Field(description="Score from 0-1 indicating itinerary quality")
     confidence_score: float = Field(description="Confidence in recommendations from 0-1")
     narrative: NarrativeResult
+    poi_search: Optional[dict] = None
+    route_report: Optional[dict] = None
 
 
 class CityResponse(BaseModel):
     id: int
     name: str
+    name_zh: Optional[str] = None
     country: str
+    country_zh: Optional[str] = None
     time_zone: str
     default_currency: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    is_domestic: bool = False
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def supports_real_routes(self) -> bool:
+        from app.core.route_cities import supports_real_routes
+        return supports_real_routes(self.name, self.is_domestic)
 
     class Config:
         from_attributes = True
@@ -265,16 +310,23 @@ class AgentToolCall(BaseModel):
     tool_name: str
     arguments: dict
     result: Optional[str] = None
+    status: str = "ok"
+    candidate_ids: List[int] = Field(default_factory=list)
 
 
 class AgentPlanRequest(BaseModel):
     """Request to plan an itinerary via the agent orchestration layer."""
     preferences: TripPreferences
+    user_message: Optional[str] = Field(default=None, max_length=2000)
 
 
 class AgentPlanResponse(BaseModel):
     """Response from the agent planner with full reasoning trace."""
     itinerary: ItineraryResponse
     agent_trace: List[AgentToolCall] = Field(description="Full sequence of tool calls made by the agent")
-    tokens_used: int = Field(description="Total OpenAI tokens consumed")
+    tokens_used: int = Field(description="Agent decision tokens reported by provider; excludes narrative and embeddings")
+    provider: Optional[str] = None
+    model: Optional[str] = None
+    candidate_ids: List[int] = Field(default_factory=list)
+    termination_reason: str = "optimized"
 

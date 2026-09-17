@@ -1,14 +1,16 @@
-"""Server-Sent Events (SSE) for streaming AI responses."""
+import json
+import logging
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from app.db.session import get_db
-from app.api.schemas import TripPreferences
+
+from app.api.schemas import ItineraryResponse, TripPreferences
+from app.config import settings
+from app.core.optimizer import build_itinerary
 from app.core.session import get_session_id
-import json
-import asyncio
-import logging
+from app.db.session import get_db
+from app.llm.generator import generate_narrative
 
 logger = logging.getLogger(__name__)
 
@@ -30,54 +32,85 @@ async def stream_itinerary_generation(
     - Final result
     """
     try:
-        # Step 1: Fetch activities
-        yield f"data: {json.dumps({'step': 'fetching', 'message': 'Fetching activities...', 'progress': 20})}\n\n"
-        await asyncio.sleep(0.1)  # Allow client to receive
+        yield _sse({"step": "fetching", "message": "Fetching activities...", "progress": 20})
 
-        # Import here to avoid circular imports
-        from app.services.itinerary_planner import ItineraryPlanner
-        from app.db.models import City, Activity
+        # Import here to avoid a module-level circular import: routes imports this router in main.py.
+        from app.api.routes import validate_trip_preferences
 
-        # Get city
-        city = db.query(City).filter(City.id == preferences.destination_city_id).first()
-        if not city:
-            yield f"data: {json.dumps({'step': 'error', 'message': 'City not found'})}\n\n"
+        cities, all_activities = validate_trip_preferences(preferences, db)
+        city_ids = preferences.get_city_ids()
+        if len(city_ids) != 1:
+            yield _sse({
+                "step": "error",
+                "message": "Streaming currently supports single-city trips only.",
+            })
             return
 
-        yield f"data: {json.dumps({'step': 'city_found', 'message': f'Planning trip to {city.name}', 'progress': 30})}\n\n"
-        await asyncio.sleep(0.1)
+        city_id = city_ids[0]
+        city = cities[city_id]
+        yield _sse({
+            "step": "city_found",
+            "message": f"Planning trip to {city.name}",
+            "progress": 30,
+        })
 
-        # Get activities
-        activities = db.query(Activity).filter(Activity.city_id == city.id).all()
-        yield f"data: {json.dumps({'step': 'activities', 'message': f'Found {len(activities)} activities', 'progress': 40})}\n\n"
-        await asyncio.sleep(0.1)
+        activities = all_activities[city_id]
+        if settings.RAG_ENABLED:
+            try:
+                from app.services.retrieval_service import retrieve_activities_semantic
+
+                activities = await retrieve_activities_semantic(preferences, city_id, db)
+            except Exception as rag_err:
+                logger.warning("RAG failed in streaming endpoint, using SQL fallback: %s", rag_err)
+
+        yield _sse({
+            "step": "activities",
+            "message": f"Found {len(activities)} activities",
+            "progress": 40,
+        })
 
         # Step 2: Run optimizer
-        yield f"data: {json.dumps({'step': 'optimizing', 'message': 'Optimizing your itinerary...', 'progress': 50})}\n\n"
-        await asyncio.sleep(0.1)
+        yield _sse({
+            "step": "optimizing",
+            "message": "Optimizing your itinerary...",
+            "progress": 50,
+        })
 
-        planner = ItineraryPlanner(db)
-
-        # Note: This is synchronous, but we wrap it for streaming
-        # In a real implementation, you'd make the planner async or use run_in_executor
-        itinerary = planner.plan_itinerary(preferences)
-
-        yield f"data: {json.dumps({'step': 'optimized', 'message': 'Itinerary optimized!', 'progress': 70})}\n\n"
-        await asyncio.sleep(0.1)
+        itinerary = build_itinerary(preferences, activities, use_ortools=settings.USE_ORTOOLS)
+        yield _sse({"step": "optimized", "message": "Itinerary optimized!", "progress": 70})
 
         # Step 3: Generate narrative (if using AI)
-        yield f"data: {json.dumps({'step': 'narrative', 'message': 'Generating travel narrative...', 'progress': 80})}\n\n"
-        await asyncio.sleep(0.5)  # Simulate AI processing
+        yield _sse({
+            "step": "narrative",
+            "message": "Generating travel narrative...",
+            "progress": 80,
+        })
 
-        yield f"data: {json.dumps({'step': 'narrative_done', 'message': 'Narrative ready!', 'progress': 90})}\n\n"
-        await asyncio.sleep(0.1)
+        narrative = await generate_narrative(itinerary, preferences)
+        yield _sse({"step": "narrative_done", "message": "Narrative ready!", "progress": 90})
 
         # Step 4: Send final result
-        yield f"data: {json.dumps({'step': 'complete', 'message': 'Itinerary generated!', 'progress': 100, 'result': json.loads(itinerary.model_dump_json())})}\n\n"
+        result = ItineraryResponse(
+            days=itinerary.days,
+            summary=itinerary.summary,
+            optimization_score=itinerary.optimization_score,
+            confidence_score=itinerary.confidence_score,
+            narrative=narrative,
+        )
+        yield _sse({
+            "step": "complete",
+            "message": "Itinerary generated!",
+            "progress": 100,
+            "result": json.loads(result.model_dump_json()),
+        })
 
     except Exception as e:
-        logger.error(f"Error streaming itinerary: {e}")
-        yield f"data: {json.dumps({'step': 'error', 'message': str(e)})}\n\n"
+        logger.exception("Error streaming itinerary")
+        yield _sse({"step": "error", "message": str(e)})
+
+
+def _sse(payload: dict) -> str:
+    return f"data: {json.dumps(payload)}\n\n"
 
 
 @router.post("/plan-itinerary/stream")

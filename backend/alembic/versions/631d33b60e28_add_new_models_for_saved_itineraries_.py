@@ -1,7 +1,7 @@
 """Add new models for saved itineraries, reviews, collaboration, flights, and accommodations
 
 Revision ID: 631d33b60e28
-Revises: 
+Revises: 000000000001
 Create Date: 2026-01-04 15:47:06.802240
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = '631d33b60e28'
-down_revision: Union[str, None] = None
+down_revision: Union[str, None] = '000000000001'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

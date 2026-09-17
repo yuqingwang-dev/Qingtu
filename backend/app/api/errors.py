@@ -3,8 +3,8 @@ from typing import Optional, Dict, Any
 from fastapi import HTTPException, status
 
 
-class RouteMindError(HTTPException):
-    """Base error class for RouteMind API."""
+class QingtuError(HTTPException):
+    """Base error class for Qingtu API."""
     
     def __init__(
         self,
@@ -25,7 +25,7 @@ class RouteMindError(HTTPException):
         )
 
 
-class CityNotFoundError(RouteMindError):
+class CityNotFoundError(QingtuError):
     """City not found error."""
     def __init__(self, city_id: int):
         super().__init__(
@@ -36,7 +36,7 @@ class CityNotFoundError(RouteMindError):
         )
 
 
-class NoActivitiesError(RouteMindError):
+class NoActivitiesError(QingtuError):
     """No activities found for city."""
     def __init__(self, city_id: int):
         super().__init__(
@@ -47,7 +47,7 @@ class NoActivitiesError(RouteMindError):
         )
 
 
-class InvalidDateRangeError(RouteMindError):
+class InvalidDateRangeError(QingtuError):
     """Invalid date range error."""
     def __init__(self, message: str = "End date must be after start date"):
         super().__init__(
@@ -57,7 +57,7 @@ class InvalidDateRangeError(RouteMindError):
         )
 
 
-class InvalidBudgetError(RouteMindError):
+class InvalidBudgetError(QingtuError):
     """Invalid budget error."""
     def __init__(self, message: str = "Budget per day must be non-negative"):
         super().__init__(
@@ -67,7 +67,7 @@ class InvalidBudgetError(RouteMindError):
         )
 
 
-class InfeasibleConstraintsError(RouteMindError):
+class InfeasibleConstraintsError(QingtuError):
     """Constraints cannot be satisfied."""
     def __init__(self, message: str, infeasible_items: Optional[Dict[str, Any]] = None):
         super().__init__(
@@ -78,7 +78,7 @@ class InfeasibleConstraintsError(RouteMindError):
         )
 
 
-class ValidationError(RouteMindError):
+class ValidationError(QingtuError):
     """General validation error."""
     def __init__(self, message: str, field: Optional[str] = None):
         details = {}

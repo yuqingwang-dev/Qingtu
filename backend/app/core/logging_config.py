@@ -1,4 +1,4 @@
-"""Structured logging configuration for RouteMind."""
+"""Structured logging configuration for Qingtu."""
 import logging
 import sys
 from pythonjsonlogger import jsonlogger
@@ -11,7 +11,7 @@ class CustomJsonFormatter(jsonlogger.JsonFormatter):
     def add_fields(self, log_record, record, message_dict):
         super().add_fields(log_record, record, message_dict)
         log_record['environment'] = settings.ENVIRONMENT
-        log_record['service'] = 'routemind-backend'
+        log_record['service'] = 'qingtu-backend'
         if not log_record.get('timestamp'):
             log_record['timestamp'] = record.created
 

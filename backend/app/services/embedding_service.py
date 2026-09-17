@@ -68,14 +68,14 @@ async def generate_embedding(text: str) -> list[float]:
     Returns a list of 1536 floats (text-embedding-3-small dimension).
     Raises RuntimeError if OpenAI key is not configured.
     """
-    if not settings.OPENAI_API_KEY:
-        raise RuntimeError("OPENAI_API_KEY not configured — cannot generate embeddings")
+    api_key = settings.EMBEDDING_API_KEY
+    if not api_key and settings.EMBEDDING_BASE_URL.rstrip("/") == "https://api.openai.com/v1":
+        api_key = settings.OPENAI_API_KEY
+    if not api_key:
+        raise RuntimeError("Embedding provider key not configured")
 
     from openai import AsyncOpenAI
-    client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
-
-    response = await client.embeddings.create(
-        model=settings.EMBEDDING_MODEL,
-        input=text,
-    )
+    async with AsyncOpenAI(api_key=api_key, base_url=settings.EMBEDDING_BASE_URL,
+                          timeout=settings.LLM_TIMEOUT_SECONDS, max_retries=1) as client:
+        response = await client.embeddings.create(model=settings.EMBEDDING_MODEL, input=text)
     return response.data[0].embedding

@@ -12,11 +12,14 @@ import {
 interface City {
   id: number;
   name: string;
+  name_zh?: string | null;
   country: string;
+  country_zh?: string | null;
   time_zone: string;
   default_currency: string;
-  latitude?: number;
-  longitude?: number;
+  latitude?: number | null;
+  longitude?: number | null;
+  is_domestic?: boolean;
 }
 
 interface WorldMapSelectorProps {
@@ -116,7 +119,7 @@ const CITY_COORDINATES: { [key: string]: [number, number] } = {
 };
 
 // Group cities by continent/region for the list
-const REGION_ORDER = ["Americas", "Europe", "Middle East", "Asia", "Oceania"];
+const REGION_ORDER = ["China", "Americas", "Europe", "Middle East", "Asia", "Oceania"];
 
 const COUNTRY_REGION: Record<string, string> = {
   // Americas
@@ -178,7 +181,25 @@ const COUNTRY_REGION: Record<string, string> = {
 };
 
 function getRegion(country: string): string {
+  if (country === "China") {
+    return "China";
+  }
   return COUNTRY_REGION[country] ?? "Other";
+}
+
+function getCityDisplayName(city: City): string {
+  return city.name_zh || city.name;
+}
+
+function getCitySearchText(city: City): string {
+  return [city.name, city.name_zh, city.country, city.country_zh]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function getCountryDisplayName(city: City): string {
+  return city.country_zh || city.country;
 }
 
 const geoUrl = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
@@ -203,7 +224,7 @@ export default function WorldMapSelector({
   onConfirm,
   onDeselect,
   multiSelect = false,
-  title = "Select Your Destination",
+  title = "选择你的目的地",
 }: WorldMapSelectorProps) {
   const [hoveredCityId, setHoveredCityId] = useState<number | null>(null);
   const [position, setPosition] = useState({ coordinates: [0, 20] as [number, number], zoom: 1 });
@@ -213,6 +234,7 @@ export default function WorldMapSelector({
   const selectedListItemRef = useRef<HTMLButtonElement | null>(null);
   const listPanelRef = useRef<HTMLDivElement | null>(null);
   const hoveredCityIdRef = useRef<number | null>(null);
+  const domesticOnly = cities.length > 0 && cities.every((city) => city.is_domestic);
 
   const setHovered = (city: City | null, fromMap = false) => {
     hoveredCityIdRef.current = city?.id ?? null;
@@ -260,11 +282,7 @@ export default function WorldMapSelector({
 
   // Filter cities for the list panel — memoized to keep stable reference
   const filteredCities = useMemo(
-    () => cities.filter(
-      (c) =>
-        c.name.toLowerCase().includes(search.toLowerCase()) ||
-        c.country.toLowerCase().includes(search.toLowerCase())
-    ),
+    () => cities.filter((city) => getCitySearchText(city).includes(search.toLowerCase().trim())),
     [cities, search]
   );
 
@@ -296,6 +314,12 @@ export default function WorldMapSelector({
     }
   }, [selectedCities]);
 
+  useEffect(() => {
+    if (domesticOnly && selectedCities.length === 0 && !pendingCity) {
+      setPosition({ coordinates: [105, 35], zoom: 3 });
+    }
+  }, [domesticOnly, selectedCities.length, pendingCity]);
+
   return (
     <div className="w-full h-full flex flex-col">
       {/* Title */}
@@ -305,13 +329,13 @@ export default function WorldMapSelector({
         </h2>
         <p className="text-gray-300 text-sm">
           {multiSelect
-            ? "Click cities on the map or browse the list"
-            : "Click a city on the map or search the list"}
+            ? "点击地图上的城市，或在右侧列表中选择"
+            : "点击地图上的城市，或通过搜索进行选择"}
         </p>
       </div>
 
       {/* Main layout: map + sidebar */}
-      <div className="flex-1 flex gap-4 min-h-0">
+      <div className="flex-1 flex flex-col md:flex-row gap-4 min-h-0">
         {/* Globe (left) */}
         <div className="relative flex-1 glass-card rounded-2xl overflow-hidden min-w-0">
           <ComposableMap
@@ -330,12 +354,12 @@ export default function WorldMapSelector({
                     <Geography
                       key={geo.rsmKey}
                       geography={geo}
-                      fill="rgba(99, 102, 241, 0.1)"
-                      stroke="rgba(139, 92, 246, 0.3)"
+                      fill="#e4eee2"
+                      stroke="#a8c2ad"
                       strokeWidth={0.5}
                       style={{
                         default: { outline: "none" },
-                        hover: { fill: "rgba(139, 92, 246, 0.2)", outline: "none" },
+                        hover: { fill: "#c6ddc9", outline: "none" },
                         pressed: { outline: "none" },
                       }}
                     />
@@ -359,12 +383,12 @@ export default function WorldMapSelector({
                     style={{ cursor: "pointer" }}
                   >
                     {(isSelected || isPending) && (
-                      <circle r={8} fill="rgba(168, 85, 247, 0.3)" className="animate-pulse" />
+                      <circle r={8} fill="rgba(21,94,83,.18)" className="animate-pulse" />
                     )}
                     <circle
                       r={isHovered ? 7 : isSelected || isPending ? 5 : 4}
-                      fill={isHovered ? "#ffffff" : isSelected || isPending ? "#a855f7" : "#6366f1"}
-                      stroke={isHovered ? "#ffffff" : isSelected || isPending ? "#fbbf24" : "#8b5cf6"}
+                      fill={isHovered ? "#ffffff" : isSelected || isPending ? "#155e53" : "#527e6b"}
+                      stroke={isHovered ? "#ffffff" : isSelected || isPending ? "#a96c28" : "#155e53"}
                       strokeWidth={isHovered ? 2 : 1.5}
                       className="transition-all duration-150"
                       style={{
@@ -382,7 +406,7 @@ export default function WorldMapSelector({
                         y={-10}
                         style={{
                           fontSize: "12px",
-                          fill: "#fbbf24",
+                          fill: "#a96c28",
                           filter: "drop-shadow(0 0 2px rgba(0,0,0,0.8))",
                         }}
                       >
@@ -400,8 +424,8 @@ export default function WorldMapSelector({
             const hc = cities.find(c => c.id === hoveredCityId);
             return hc ? (
               <div className="absolute top-3 left-3 glass-card px-3 py-2 rounded-lg z-10 pointer-events-none animate-fade-in">
-                <p className="text-white font-semibold text-sm">{hc.name}</p>
-                <p className="text-purple-300 text-xs">{hc.country}</p>
+                <p className="text-white font-semibold text-sm">{getCityDisplayName(hc)}</p>
+                <p className="text-purple-300 text-xs">{getCountryDisplayName(hc)}</p>
               </div>
             ) : null;
           })()}
@@ -415,7 +439,7 @@ export default function WorldMapSelector({
                     <span className="text-white text-lg">📍</span>
                   </div>
                   <div className="min-w-0">
-                    <p className="text-white font-bold truncate">{pendingCity.name}</p>
+                    <p className="text-white font-bold truncate">{getCityDisplayName(pendingCity)}</p>
                     <p className="text-purple-300 text-xs">{pendingCity.country} · {pendingCity.default_currency}</p>
                   </div>
                 </div>
@@ -424,13 +448,13 @@ export default function WorldMapSelector({
                     onClick={() => { setPendingCity(null); onDeselect?.(); }}
                     className="px-3 py-2 text-sm text-gray-400 hover:text-white transition-colors"
                   >
-                    Change
+                    更换
                   </button>
                   <button
                     onClick={handleConfirm}
                     className="px-5 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg font-semibold text-sm hover:opacity-90 transition-opacity flex items-center gap-1"
                   >
-                    Plan this trip →
+                    开始规划 →
                   </button>
                 </div>
               </div>
@@ -442,21 +466,21 @@ export default function WorldMapSelector({
             <button
               onClick={() => setPosition({ ...position, zoom: Math.min(position.zoom * 1.5, 8) })}
               className="w-9 h-9 glass-card rounded-lg flex items-center justify-center hover:bg-purple-500/20 transition-colors text-white text-xl"
-              title="Zoom In"
+              title="放大"
             >
               +
             </button>
             <button
               onClick={() => setPosition({ ...position, zoom: Math.max(position.zoom / 1.5, 1) })}
               className="w-9 h-9 glass-card rounded-lg flex items-center justify-center hover:bg-purple-500/20 transition-colors text-white text-xl"
-              title="Zoom Out"
+              title="缩小"
             >
               −
             </button>
             <button
-              onClick={() => setPosition({ coordinates: [0, 20], zoom: 1 })}
+              onClick={() => setPosition(domesticOnly ? { coordinates: [105, 35], zoom: 3 } : { coordinates: [0, 20], zoom: 1 })}
               className="w-9 h-9 glass-card rounded-lg flex items-center justify-center hover:bg-purple-500/20 transition-colors text-lg"
-              title="Reset View"
+              title="重置视图"
             >
               🌍
             </button>
@@ -464,14 +488,14 @@ export default function WorldMapSelector({
         </div>
 
         {/* City List Panel (right) */}
-        <div className="w-64 flex-shrink-0 glass-card rounded-2xl flex flex-col overflow-hidden">
+        <div className="w-full md:w-64 max-h-52 md:max-h-none flex-shrink-0 glass-card rounded-2xl flex flex-col overflow-hidden">
           {/* Search */}
           <div className="p-3 border-b border-white/10">
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
               <input
                 type="text"
-                placeholder="Search cities..."
+                placeholder="搜索城市..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full pl-8 pr-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder-gray-400 focus:outline-none focus:border-purple-500/50"
@@ -479,12 +503,12 @@ export default function WorldMapSelector({
             </div>
             {selectedCities.length > 0 && !pendingCity && (
               <p className="text-purple-400 text-xs mt-2 text-center">
-                ✓ {selectedCities.length} {selectedCities.length === 1 ? "city" : "cities"} selected
+                ✓ 已选择 {selectedCities.length} 座城市
               </p>
             )}
             {pendingCity && (
               <p className="text-yellow-400 text-xs mt-2 text-center font-medium">
-                📍 {pendingCity.name} selected
+                📍 已选择 {pendingCity.name}
               </p>
             )}
           </div>
@@ -493,7 +517,7 @@ export default function WorldMapSelector({
           <div ref={listPanelRef} className="flex-1 overflow-y-auto">
             {REGION_ORDER.filter((r) => grouped[r]?.length > 0).map((region) => (
               <div key={region}>
-                <div className="px-3 py-1.5 text-xs font-semibold text-purple-400 uppercase tracking-wider bg-[#1e1330] sticky top-0 z-10">
+                <div className="px-3 py-1.5 text-xs font-semibold text-purple-400 uppercase tracking-wider bg-[#edf3e8] sticky top-0 z-10">
                   {region}
                 </div>
                 {grouped[region].map((city) => {
@@ -520,9 +544,9 @@ export default function WorldMapSelector({
                     >
                       <div className="min-w-0">
                         <p className={`text-sm font-medium truncate ${isPending ? "text-yellow-300" : isSelected ? "text-purple-300" : "text-white"}`}>
-                          {city.name}
+                          {getCityDisplayName(city)}
                         </p>
-                        <p className="text-xs text-gray-400 truncate">{city.country}</p>
+                        <p className="text-xs text-gray-400 truncate">{getCountryDisplayName(city)}</p>
                       </div>
                       {(isSelected || isPending) && (
                         <span className={`text-xs ml-2 flex-shrink-0 ${isPending ? "text-yellow-400" : "text-yellow-400"}`}>✓</span>
@@ -536,7 +560,7 @@ export default function WorldMapSelector({
               <div className="px-4 py-6 text-center">
                 {fuzzyMatches.length > 0 ? (
                   <>
-                    <p className="text-gray-400 text-xs mb-3">Did you mean…</p>
+                    <p className="text-gray-400 text-xs mb-3">你是不是想找这些城市？</p>
                     {fuzzyMatches.map((city) => (
                       <button
                         key={city.id}
@@ -545,8 +569,8 @@ export default function WorldMapSelector({
                         onMouseLeave={() => setHovered(null)}
                         className="w-full text-left px-3 py-2 rounded-lg hover:bg-white/10 transition-all mb-1"
                       >
-                        <p className="text-white font-medium text-sm">{city.name}</p>
-                        <p className="text-gray-400 text-xs">{city.country}</p>
+                        <p className="text-white font-medium text-sm">{getCityDisplayName(city)}</p>
+                        <p className="text-gray-400 text-xs">{getCountryDisplayName(city)}</p>
                       </button>
                     ))}
                   </>
@@ -554,10 +578,10 @@ export default function WorldMapSelector({
                   <>
                     <div className="text-3xl mb-3">🌍</div>
                     <p className="text-white font-semibold text-sm mb-1">
-                      "{search}" not available yet
+                      暂未收录 “{search}”
                     </p>
                     <p className="text-gray-400 text-xs leading-relaxed">
-                      We're constantly expanding our database. Check back soon!
+                      我们正在持续扩展城市数据库，稍后再来看看。
                     </p>
                   </>
                 )}

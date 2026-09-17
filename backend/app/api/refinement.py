@@ -4,9 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.db.models import Activity
+from app.db.models import Activity, City
 from app.api.schemas import RefineRequest, RefineResponse
 from app.config import settings
+from app.llm.provider import get_chat_provider, LLMRequestError
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -33,8 +34,8 @@ async def refine_itinerary(
     - "Remove the adventure activity from Day 3"
     - "Swap Day 2 morning with something cheaper"
     """
-    if not settings.OPENAI_API_KEY:
-        raise HTTPException(status_code=503, detail="LLM not configured — OPENAI_API_KEY missing")
+    if not get_chat_provider().api_key:
+        raise HTTPException(status_code=503, detail="所选模型服务尚未配置密钥")
 
     from app.services.refinement_service import parse_refinement_intent, apply_refinement
 
@@ -61,14 +62,24 @@ async def refine_itinerary(
     try:
         intent = await parse_refinement_intent(user_message, itinerary, candidate_pool)
         logger.info(f"Parsed refinement intent: action={intent.action}, day={intent.target_day}, target={intent.target_activity_name}")
+    except LLMRequestError as e:
+        raise HTTPException(status_code=503, detail={"error_code": e.code, "message": "模型调用失败，请稍后重试"}) from None
     except Exception as e:
-        logger.error(f"LLM intent parsing failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to parse refinement request: {str(e)}")
+        logger.error("LLM intent parsing failed: %s", type(e).__name__)
+        raise HTTPException(status_code=502, detail="模型返回的修改指令无效") from None
 
     # Step 2: Apply refinement deterministically
     try:
         result = await apply_refinement(intent, itinerary, preferences, db, user_message=user_message)
+        from app.services.live_poi_service import attach_poi_provenance
+        attach_poi_provenance(result.itinerary, all_activities)
+        if preferences.use_real_routes:
+            from app.services.route_planning import apply_real_routes
+            city = db.query(City).filter(City.id == city_id).first()
+            result.itinerary.route_report = await apply_real_routes(result.itinerary, preferences, all_activities, city)
         return result
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Refinement application failed: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to apply refinement: {str(e)}")

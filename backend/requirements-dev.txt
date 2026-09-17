@@ -1,0 +1,6 @@
+-r requirements.txt
+
+# Quality gates
+ruff>=0.8,<1
+mypy>=1.13,<2
+types-redis>=4.6,<5

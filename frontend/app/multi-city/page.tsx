@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import MultiCityResults from "../components/MultiCityResults";
 import Toast from "../components/Toast";
 
@@ -193,12 +194,12 @@ export default function MultiCityPage() {
         {/* Header */}
         <div className="text-center mb-6 md:mb-8 animate-fade-in">
           <div className="inline-block mb-4">
-            <a
+            <Link
               href="/"
               className="glass px-6 py-3 rounded-full font-semibold text-gray-700 hover:bg-white/40 transition-all flex items-center gap-2 hover-lift shadow-lg"
             >
               ← Back to Single City
-            </a>
+            </Link>
           </div>
           <div className="inline-block mb-4">
             <div className="text-6xl md:text-7xl mb-4 animate-float">🗺️</div>
