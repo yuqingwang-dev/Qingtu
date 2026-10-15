@@ -16,6 +16,7 @@ from app.api.agent import router as agent_router
 from app.api.domestic import router as domestic_router
 from app.api.pois import router as pois_router
 from app.api.knowledge import router as knowledge_router
+from app.api.system import router as system_router
 from app.middleware.rate_limit import RateLimitMiddleware
 from app.core.cache import cache
 from app.core.logging_config import setup_logging
@@ -68,6 +69,7 @@ app.add_middleware(RateLimitMiddleware, requests_per_minute=10)
 app.include_router(auth_router, prefix=f"{settings.API_V1_PREFIX}/auth", tags=["auth"])
 app.include_router(router, prefix=settings.API_V1_PREFIX)
 app.include_router(knowledge_router, prefix=settings.API_V1_PREFIX)
+app.include_router(system_router, prefix=settings.API_V1_PREFIX)
 app.include_router(domestic_router, prefix=settings.API_V1_PREFIX, tags=["domestic"])
 app.include_router(pois_router, prefix=settings.API_V1_PREFIX, tags=["POI搜索"])
 app.include_router(streaming_router, prefix=settings.API_V1_PREFIX, tags=["streaming"])

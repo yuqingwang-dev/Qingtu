@@ -156,6 +156,8 @@ interface ItineraryResponse {
     narrative_text: string;
     explanations?: string;
     tips?: string;
+    source?: string;
+    provider?: string;
   };
 }
 
@@ -946,13 +948,21 @@ export default function SingleCityPlanner() {
               travelDate={itinerary.days[itinerary.days.length - 1]?.date}
             />}
             {itinerary.narrative?.narrative_text && (
+              <>
+              <div className='mb-3 flex items-center justify-between gap-3'>
+                <span className={itinerary.narrative.source === 'ai' ? 'text-xs rounded-full px-3 py-1 bg-emerald-100 text-emerald-800' : 'text-xs rounded-full px-3 py-1 bg-amber-100 text-amber-900'}>
+                  {itinerary.narrative.source === 'ai' ? 'AI 解读 · 已验证' : '规则降级 · 未生成 AI 解读'}
+                </span>
+                {itinerary.narrative.source !== 'ai' && <span className='text-sm text-amber-900'>行程仍可使用，但以下说明不是模型生成内容。</span>}
+              </div>
               <div className="glass-card rounded-2xl p-6">
                 <h3 className="text-xl font-bold text-white mb-3">这趟旅程的小贴士</h3>
                 <p className="text-gray-300 leading-relaxed whitespace-pre-line">
                   {itinerary.narrative.narrative_text}
-                </p>
-              </div>
-            )}
+               </p>
+               </div>
+              </>
+             )}
 
             {/* Refine Itinerary */}
             <div className="glass-card rounded-2xl p-6">
